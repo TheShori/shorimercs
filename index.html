@@ -47,7 +47,8 @@
       Shield, Sword, CheckCircle2, Clock, Plus, Copy, Eye, EyeOff, Play, Pause, Check, 
       Trash2, Edit3, Search, Smartphone, DollarSign, Euro, LogOut, Lock, Crown, 
       Calendar, CreditCard, History, Users, Tag, BarChart3, TrendingUp, ArrowUp, Key, Sparkles,
-      Bell, BellRing, Volume2, VolumeX, CheckCheck, MessageCircle, Activity, Award, Timer, ListChecks
+      Bell, BellRing, Volume2, VolumeX, CheckCheck, MessageCircle, Activity, Award, Timer, ListChecks,
+      Bot, Send, Phone
     } from 'lucide-react';
 
     import { initializeApp } from "firebase/app";
@@ -75,18 +76,24 @@
 
     const ADMIN_EMAIL = 'victorsoripar@gmail.com';
 
-    // Disparador opcional de Webhook de WhatsApp vía Make.com
-    const triggerWhatsAppWebhook = async (payloadData) => {
-      try {
-        // Pon aquí la URL de tu Webhook Custom de Make si deseas llamadas directas desde cliente
-        // const webhookUrl = 'TU_WEBHOOK_URL_DE_MAKE';
-        // await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadData) });
-      } catch (e) {
-        console.warn("Webhook WhatsApp:", e);
+    // Limpia el teléfono para la API Oficial de Meta (solo dígitos con prefijo de país, ej: 34600112233)
+    const sanitizePhoneForMeta = (rawPhone) => {
+      if (!rawPhone) return '';
+      let digits = String(rawPhone).replace(/[^\d]/g, '');
+      if (digits.startsWith('00')) digits = digits.slice(2);
+      // Si pone un móvil español de 9 dígitos (6... o 7...) sin prefijo, le añade 34 automáticamente
+      if (digits.length === 9 && (digits.startsWith('6') || digits.startsWith('7'))) {
+        digits = '34' + digits;
       }
+      return digits;
     };
 
-    // Sintetizador de sonido para notificaciones en tiempo real
+    const formatPhoneDisplay = (rawPhone) => {
+      const clean = sanitizePhoneForMeta(rawPhone);
+      return clean ? `+${clean}` : (rawPhone || '');
+    };
+
+    // Sintetizador de sonido para notificaciones en tiempo real (sin archivos externos)
     const playNotificationSound = (type = 'default') => {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -221,6 +228,18 @@
       const [tags, setTags] = useState([]);
       const [notifications, setNotifications] = useState([]);
       
+      // Configuración de Automatización Fantasma (Make.com + Meta WhatsApp Cloud API)
+      const [automationSettings, setAutomationSettings] = useState({
+        makeWebhookUrl: '',
+        enabled: true,
+        notifyOnStart: true,
+        notifyOnPause: true,
+        notifyOnResume: true,
+        notifyOnChecklist: true,
+        notifyOnComplete: true
+      });
+      const [isBotModalOpen, setIsBotModalOpen] = useState(false);
+
       const [authUser, setAuthUser] = useState(null); 
       const [isAuthChecking, setIsAuthChecking] = useState(true);
       const [emailInput, setEmailInput] = useState('');
@@ -270,7 +289,7 @@
       const [showAllCreatorPasswords, setShowAllCreatorPasswords] = useState(true);
 
       const [missionForm, setMissionForm] = useState({
-        clientName: '', clientContact: '', missionTitle: '', gameCategory: 'Exploración de Actos',
+        clientName: '', clientPhone: '', clientContact: '', missionTitle: '', gameCategory: 'Exploración de Actos',
         accountUser: '', accountPass: '', loginMethod: 'Kabam ID', instructions: '',
         priority: 'Normal', workerId: 'unassigned', priceTotalEUR: '', workerPayUSD: '',
         paymentMethod: 'Bizum', tags: [], checklist: []
@@ -318,17 +337,156 @@
           setNotifications(cloudNotifs);
         });
 
+        const unsubSettings = onSnapshot(doc(db, "settings", "whatsapp_automation"), (docSnap) => {
+          if (docSnap.exists()) {
+            setAutomationSettings(prev => ({ ...prev, ...docSnap.data() }));
+          }
+        });
+
         return () => {
           unsubMissions();
           unsubWorkers();
           unsubTags();
           unsubNotifications();
+          unsubSettings();
         };
       }, [authUser]);
 
       const showToast = (msg) => {
         setToastMessage({ text: msg });
         setTimeout(() => setToastMessage(null), 3500);
+      };
+
+      // =========================================================================
+      // MOTOR DE AUTOMATIZACIÓN FANTASMA DE WHATSAPP (FIREBASE QUEUE + MAKE WEBHOOK)
+      // =========================================================================
+      const triggerAutomaticClientWhatsApp = async ({
+        mission,
+        eventType, // 'mission_started' | 'mission_paused' | 'mission_resumed' | 'checklist_step' | 'mission_completed'
+        metaTemplateName, // Nombre sugerido de la plantilla en Meta WhatsApp Cloud API
+        stepDetail = '',
+        progressText = '',
+        notes = ''
+      }) => {
+        if (!mission || !automationSettings.enabled) return;
+
+        const rawPhone = mission.clientPhone || mission.clientContact || '';
+        const cleanMetaPhone = sanitizePhoneForMeta(rawPhone);
+        if (!cleanMetaPhone || cleanMetaPhone.length < 8) {
+          return; // Si el cliente no tiene número de teléfono válido, no dispara WhatsApp
+        }
+
+        // Comprobar si este tipo de evento está activo en la configuración del Bot
+        if (eventType === 'mission_started' && !automationSettings.notifyOnStart) return;
+        if (eventType === 'mission_paused' && !automationSettings.notifyOnPause) return;
+        if (eventType === 'mission_resumed' && !automationSettings.notifyOnResume) return;
+        if (eventType === 'checklist_step' && !automationSettings.notifyOnChecklist) return;
+        if (eventType === 'mission_completed' && !automationSettings.notifyOnComplete) return;
+
+        // Textos automáticos listos para enviar o inyectar como variables {{1}}, {{2}}, {{3}} en Meta
+        let fullMessageText = '';
+        if (eventType === 'mission_started') {
+          fullMessageText = `¡Hola ${mission.clientName}! 🎮 Nuestro mercenario acaba de entrar a tu cuenta para empezar la misión "${mission.missionTitle}". Por favor, no abras el juego mientras esté en curso para evitar desconexiones. ¡Te avisaremos por aquí en cuanto pausemos o terminemos!`;
+        } else if (eventType === 'mission_paused') {
+          fullMessageText = `¡Hola ${mission.clientName}! ⏸️ Hemos puesto en pausa temporalmente tu misión "${mission.missionTitle}". Tienes tu cuenta 100% libre para entrar a jugar con normalidad. Te avisaremos por aquí cuando volvamos a retomarla.`;
+        } else if (eventType === 'mission_resumed') {
+          fullMessageText = `¡Hola ${mission.clientName}! ▶️ Nuestro mercenario vuelve a entrar a tu cuenta para continuar con la misión "${mission.missionTitle}". Por favor, no entres al juego hasta nuevo aviso.`;
+        } else if (eventType === 'checklist_step') {
+          fullMessageText = `¡Hola ${mission.clientName}! ☑️ Nuevo avance en tu misión "${mission.missionTitle}": acabamos de completar "${stepDetail}" (Progreso total: ${progressText}). ¡Seguimos avanzando!`;
+        } else if (eventType === 'mission_completed') {
+          fullMessageText = `¡Hola ${mission.clientName}! 🚀 ¡Enhorabuena! Tu misión "${mission.missionTitle}" ya está 100% COMPLETADA. Ya puedes entrar a tu cuenta y disfrutar de las recompensas. ¡Muchas gracias por tu confianza!`;
+        }
+
+        const now = Date.now();
+        const queueId = `wa-${now}-${Math.random().toString(36).slice(2, 7)}`;
+
+        const payload = {
+          id: queueId,
+          timestamp: now,
+          isoDate: new Date(now).toISOString(),
+          eventType,
+          metaTemplateName,
+          toPhoneMeta: cleanMetaPhone, // Formato oficial Meta sin '+' (ej: 34611223344)
+          toPhoneE164: `+${cleanMetaPhone}`,
+          clientName: mission.clientName || 'Cliente',
+          missionTitle: mission.missionTitle || 'Misión',
+          stepDetail: stepDetail || 'Completado',
+          progressText: progressText || '100%',
+          notes: notes || 'Completado con éxito',
+          fullMessageText,
+          // Variables listas para mapear en los parámetros {{1}}, {{2}}, {{3}} de la plantilla de Meta
+          templateParam1: mission.clientName || 'Cliente',
+          templateParam2: mission.missionTitle || 'Misión',
+          templateParam3: stepDetail || progressText || notes || 'Listo'
+        };
+
+        // 1. Guardar en la colección "whatsapp_queue" de Firebase (por si Make escucha Firestore)
+        if (db) {
+          try {
+            await setDoc(doc(db, "whatsapp_queue", queueId), payload);
+          } catch (e) {
+            console.error("Error guardando en whatsapp_queue:", e);
+          }
+        }
+
+        // 2. Disparar Webhook directo e instantáneo a Make.com en segundo plano ("Fantasma")
+        if (automationSettings.makeWebhookUrl && automationSettings.makeWebhookUrl.startsWith('http')) {
+          try {
+            fetch(automationSettings.makeWebhookUrl.trim(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            }).catch(() => {});
+          } catch (e) {}
+        }
+      };
+
+      const handleSaveBotSettings = async (e) => {
+        e.preventDefault();
+        if (db) {
+          try {
+            await setDoc(doc(db, "settings", "whatsapp_automation"), automationSettings, { merge: true });
+            showToast('🤖 Configuración del Bot de WhatsApp guardada');
+            setIsBotModalOpen(false);
+          } catch (err) {
+            console.error(err);
+          }
+        }
+      };
+
+      const handleTestMakeWebhook = async () => {
+        if (!automationSettings.makeWebhookUrl || !automationSettings.makeWebhookUrl.startsWith('http')) {
+          showToast('⚠️ Pega primero la URL del Webhook de Make.com');
+          return;
+        }
+        const testPayload = {
+          id: `wa-test-${Date.now()}`,
+          timestamp: Date.now(),
+          isoDate: new Date().toISOString(),
+          eventType: 'mission_paused',
+          metaTemplateName: 'mision_pausada',
+          toPhoneMeta: '34600000000',
+          toPhoneE164: '+34600000000',
+          clientName: 'Cliente de Prueba',
+          missionTitle: '3 Caminos Necrópolis',
+          stepDetail: 'Camino 1',
+          progressText: '1/3 (33%)',
+          notes: 'Prueba de conexión',
+          fullMessageText: '¡Hola Cliente de Prueba! ⏸️ Hemos puesto en pausa temporalmente tu misión "3 Caminos Necrópolis". Tienes tu cuenta 100% libre para entrar a jugar.',
+          templateParam1: 'Cliente de Prueba',
+          templateParam2: '3 Caminos Necrópolis',
+          templateParam3: '1/3 (33%)'
+        };
+        try {
+          await fetch(automationSettings.makeWebhookUrl.trim(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(testPayload)
+          });
+          showToast('✅ Datos de prueba enviados a Make.com');
+        } catch (err) {
+          showToast('⚠️ Error al conectar con el Webhook de Make');
+        }
       };
 
       const isCreatorSession = authUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
@@ -659,11 +817,13 @@
           const rawName = (m.clientName || '').trim();
           if (!rawName || isExcludedInternalClient(rawName)) return;
           const key = rawName.toLowerCase();
+          const phoneVal = m.clientPhone || m.clientContact || '';
 
           if (!clientMap.has(key)) {
             clientMap.set(key, {
               clientName: rawName,
-              clientContact: m.clientContact || '',
+              clientPhone: phoneVal,
+              clientContact: phoneVal,
               accountUser: m.accountUser || '',
               accountPass: m.accountPass || '',
               loginMethod: m.loginMethod || 'Kabam ID',
@@ -676,7 +836,8 @@
             const existing = clientMap.get(key);
             existing.missionsCount += 1;
             existing.totalSpentEUR += (Number(m.priceTotalEUR) || 0);
-            if (!existing.clientContact && m.clientContact) existing.clientContact = m.clientContact;
+            if (!existing.clientPhone && phoneVal) existing.clientPhone = phoneVal;
+            if (!existing.clientContact && phoneVal) existing.clientContact = phoneVal;
             if (!existing.accountUser && m.accountUser) existing.accountUser = m.accountUser;
             if (!existing.accountPass && m.accountPass) existing.accountPass = m.accountPass;
             if (!existing.loginMethod && m.loginMethod) existing.loginMethod = m.loginMethod;
@@ -694,22 +855,25 @@
         if (!q) return knownClientsDatabase.slice(0, 6);
         return knownClientsDatabase.filter(c =>
           c.clientName.toLowerCase().includes(q) ||
-          (c.accountUser && c.accountUser.toLowerCase().includes(q))
+          (c.accountUser && c.accountUser.toLowerCase().includes(q)) ||
+          (c.clientPhone && c.clientPhone.toLowerCase().includes(q))
         ).slice(0, 6);
       }, [knownClientsDatabase, missionForm.clientName]);
 
       const handleSelectKnownClient = (clientData) => {
+        const savedPhone = clientData.clientPhone || clientData.clientContact || '';
         setMissionForm(prev => ({
           ...prev,
           clientName: clientData.clientName,
-          clientContact: clientData.clientContact || prev.clientContact,
+          clientPhone: savedPhone || prev.clientPhone,
+          clientContact: savedPhone || prev.clientContact,
           loginMethod: clientData.loginMethod || prev.loginMethod || 'Kabam ID',
           accountUser: clientData.accountUser || prev.accountUser,
           accountPass: clientData.accountPass || prev.accountPass,
           paymentMethod: clientData.paymentMethod || prev.paymentMethod || 'Bizum'
         }));
         setShowClientSuggestions(false);
-        showToast(`⚡ Datos de ${clientData.clientName} autocompletados`);
+        showToast(`⚡ Datos y WhatsApp de ${clientData.clientName} autocompletados`);
       };
 
       const clientAnalytics = useMemo(() => {
@@ -724,12 +888,14 @@
 
           const rev = Number(m.priceTotalEUR) || 0;
           const costUSD = Number(m.originalWorkerPayUSD !== undefined ? m.originalWorkerPayUSD : m.workerPayUSD) || 0;
+          const phoneVal = m.clientPhone || m.clientContact || '';
 
           if (!map.has(key)) {
             map.set(key, {
               key,
               clientName: rawName,
-              clientContact: m.clientContact || '',
+              clientPhone: phoneVal,
+              clientContact: phoneVal,
               accountUser: m.accountUser || '',
               accountPass: m.accountPass || '',
               loginMethod: m.loginMethod || 'Kabam ID',
@@ -746,7 +912,8 @@
           item.workerCostUSD += costUSD;
           if (!item.accountUser && m.accountUser) item.accountUser = m.accountUser;
           if (!item.accountPass && m.accountPass) item.accountPass = m.accountPass;
-          if (!item.clientContact && m.clientContact) item.clientContact = m.clientContact;
+          if (!item.clientPhone && phoneVal) item.clientPhone = phoneVal;
+          if (!item.clientContact && phoneVal) item.clientContact = phoneVal;
         });
 
         const statsList = Array.from(map.values()).map(item => {
@@ -846,6 +1013,7 @@
         }));
       };
 
+      // Al marcar un paso de la Checklist -> Notifica al Creador y dispara WhatsApp Fantasma al Cliente
       const handleToggleMissionChecklistItem = async (mission, itemId) => {
         if (!db) return;
         const currentList = getMissionChecklist(mission);
@@ -861,40 +1029,31 @@
         try {
           await setDoc(doc(db, "missions", mission.id), { checklist: updatedList }, { merge: true });
           const doneCount = updatedList.filter(i => i.done).length;
+          const pct = Math.round((doneCount / updatedList.length) * 100);
+          const progressStr = `${doneCount}/${updatedList.length} (${pct}%)`;
 
-          if (!isCreatorSession && toggledItem && toggledItem.done) {
-            const workerName = currentIsolatedWorker?.name || 'Mercenario';
-            await pushCloudNotification({
-              recipient: 'creator',
-              title: `☑️ Avance de ${workerName} (${doneCount}/${updatedList.length})`,
-              message: `${workerName} completó el paso "${toggledItem.text}" en "${mission.missionTitle}" (Cliente: ${mission.clientName}).`,
-              eventType: 'started',
-              missionTitle: mission.missionTitle,
-              clientName: mission.clientName
+          if (toggledItem && toggledItem.done) {
+            if (!isCreatorSession) {
+              const workerName = currentIsolatedWorker?.name || 'Mercenario';
+              await pushCloudNotification({
+                recipient: 'creator',
+                title: `☑️ Avance de ${workerName} (${doneCount}/${updatedList.length})`,
+                message: `${workerName} completó el paso "${toggledItem.text}" en "${mission.missionTitle}" (Cliente: ${mission.clientName}).`,
+                eventType: 'started',
+                missionTitle: mission.missionTitle,
+                clientName: mission.clientName
+              });
+            }
+
+            // Disparo automático de WhatsApp al cliente informando del objetivo completado
+            await triggerAutomaticClientWhatsApp({
+              mission,
+              eventType: 'checklist_step',
+              metaTemplateName: 'avance_mision',
+              stepDetail: toggledItem.text,
+              progressText: progressStr
             });
           }
-
-          // Plantilla de Meta exacta: mision_actualizada
-          triggerWhatsAppWebhook({
-            messaging_product: "whatsapp",
-            to: "34692647578",
-            type: "template",
-            template: {
-              name: "mision_actualizada",
-              language: { code: "es_ES" },
-              components: [
-                {
-                  type: "body",
-                  parameters: [
-                    { type: "text", text: mission.clientName || "Cliente" },
-                    { type: "text", text: mission.missionTitle || "Misión" },
-                    { type: "text", text: toggledItem ? toggledItem.text : "Progreso actualizado" }
-                  ]
-                }
-              ]
-            }
-          });
-
           showToast(`☑️ Progreso actualizado (${doneCount}/${updatedList.length})`);
         } catch (err) {
           console.error(err);
@@ -944,9 +1103,16 @@
           setNewChecklistItemText('');
         }
 
+        const rawPhoneInput = (missionForm.clientPhone || missionForm.clientContact || '').trim();
+        const sanitizedMetaPhone = sanitizePhoneForMeta(rawPhoneInput);
+        const formattedPhone = sanitizedMetaPhone ? `+${sanitizedMetaPhone}` : rawPhoneInput;
+
         const targetMonthYear = editingMission ? (editingMission.monthYear || getCurrentMonthYear()) : getCurrentMonthYear();
         const payload = {
           ...missionForm,
+          clientPhone: formattedPhone,
+          clientPhoneMeta: sanitizedMetaPhone,
+          clientContact: formattedPhone,
           priceTotalEUR: Number(missionForm.priceTotalEUR) || 0,
           workerPayUSD: Number(missionForm.workerPayUSD) || 0,
           paymentMethod: missionForm.paymentMethod === 'PayPal' ? 'PayPal' : 'Bizum',
@@ -1095,6 +1261,21 @@
               clientName: mission.clientName
             });
           }
+
+          // Disparar WhatsApp automático al cliente también si el Creador cambia el estado manualmente
+          if (newStatus === 'En Pausa') {
+            await triggerAutomaticClientWhatsApp({ mission, eventType: 'mission_paused', metaTemplateName: 'mision_pausada' });
+          } else if (newStatus === 'En Progreso') {
+            const wasPaused = mission.status === 'En Pausa';
+            await triggerAutomaticClientWhatsApp({
+              mission,
+              eventType: wasPaused ? 'mission_resumed' : 'mission_started',
+              metaTemplateName: wasPaused ? 'mision_reanudada' : 'mision_iniciada'
+            });
+          } else if (newStatus === 'Completada') {
+            await triggerAutomaticClientWhatsApp({ mission, eventType: 'mission_completed', metaTemplateName: 'mision_completada' });
+          }
+
           showToast(`Estado cambiado a ${newStatus}`);
         } catch (err) {
           console.error(err);
@@ -1113,6 +1294,7 @@
         }
       };
 
+      // Cuando el Mercenario empieza o reanuda la misión -> Dispara WhatsApp Fantasma al Cliente
       const handleStartMission = async (mission) => {
         const now = Date.now();
         const isResuming = mission.status === 'En Pausa';
@@ -1134,32 +1316,17 @@
             missionTitle: mission.missionTitle,
             clientName: mission.clientName
           });
+
+          await triggerAutomaticClientWhatsApp({
+            mission,
+            eventType: isResuming ? 'mission_resumed' : 'mission_started',
+            metaTemplateName: isResuming ? 'mision_reanudada' : 'mision_iniciada'
+          });
         }
-
-        // Plantilla de Meta exacta: mision_iniciada (o mision_reanudada)
-        const templateToUse = isResuming ? "mision_reanudada" : "mision_iniciada";
-        triggerWhatsAppWebhook({
-          messaging_product: "whatsapp",
-          to: "34692647578",
-          type: "template",
-          template: {
-            name: templateToUse,
-            language: { code: "es_ES" },
-            components: [
-              {
-                type: "body",
-                parameters: [
-                  { type: "text", text: mission.clientName || "Cliente" },
-                  { type: "text", text: mission.missionTitle || "Misión" }
-                ]
-              }
-            ]
-          }
-        });
-
-        showToast(isResuming ? '▶️ Misión reanudada (Creador notificado)' : '▶️ Misión puesta En Curso (Creador notificado)');
+        showToast(isResuming ? '▶️ Misión reanudada' : '▶️ Misión puesta En Curso');
       };
 
+      // Cuando el Mercenario pausa la misión -> Dispara WhatsApp Fantasma al Cliente (Cuenta Libre)
       const handlePauseMission = async (mission) => {
         const now = Date.now();
         const startRef = Number(mission.lastResumedAt || mission.startedAt || now);
@@ -1183,29 +1350,14 @@
             missionTitle: mission.missionTitle,
             clientName: mission.clientName
           });
+
+          await triggerAutomaticClientWhatsApp({
+            mission,
+            eventType: 'mission_paused',
+            metaTemplateName: 'mision_pausada'
+          });
         }
-
-        // Plantilla de Meta exacta: mision_pausada
-        triggerWhatsAppWebhook({
-          messaging_product: "whatsapp",
-          to: "34692647578",
-          type: "template",
-          template: {
-            name: "mision_pausada",
-            language: { code: "es_ES" },
-            components: [
-              {
-                type: "body",
-                parameters: [
-                  { type: "text", text: mission.clientName || "Cliente" },
-                  { type: "text", text: mission.missionTitle || "Misión" }
-                ]
-              }
-            ]
-          }
-        });
-
-        showToast('⏸️ Misión en pausa. Creador avisado de que el cliente puede entrar');
+        showToast('⏸️ Misión en pausa (Cliente avisado automáticamente)');
       };
 
       const handlePrioritizeMission = async (mission) => {
@@ -1215,6 +1367,7 @@
         showToast('⬆️ Misión priorizada');
       };
 
+      // Cuando el Mercenario completa la misión -> Dispara WhatsApp Fantasma al Cliente (100% Completada)
       const handleConfirmCompleteMission = async (e) => {
         e.preventDefault();
         if (!completingMission) return;
@@ -1250,29 +1403,15 @@
             missionTitle: completingMission.missionTitle,
             clientName: completingMission.clientName
           });
+
+          await triggerAutomaticClientWhatsApp({
+            mission: completingMission,
+            eventType: 'mission_completed',
+            metaTemplateName: 'mision_completada',
+            notes: finalNote
+          });
         }
-
-        // Plantilla de Meta exacta: mision_completada
-        triggerWhatsAppWebhook({
-          messaging_product: "whatsapp",
-          to: "34692647578",
-          type: "template",
-          template: {
-            name: "mision_completada",
-            language: { code: "es_ES" },
-            components: [
-              {
-                type: "body",
-                parameters: [
-                  { type: "text", text: completingMission.clientName || "Cliente" },
-                  { type: "text", text: completingMission.missionTitle || "Misión" }
-                ]
-              }
-            ]
-          }
-        });
-
-        showToast('✅ ¡Misión finalizada! Creador notificado');
+        showToast('✅ ¡Misión finalizada! Cliente y Creador notificados');
         setCompletingMission(null);
         setCompletionNoteInput('');
       };
@@ -1573,6 +1712,7 @@
         );
       };
 
+      // Tarjeta de Misión del Mercenario (sin mostrar el tiempo de trabajo, solo visible en el panel del Creador)
       const renderWorkerMissionCard = (m, index) => {
         const isFirst = index === 0;
         const isInProgress = m.status === 'En Progreso';
@@ -1726,6 +1866,7 @@
 
       return (
         <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-20">
+          {/* BANNER EMERGENTE SUPERIOR DE NOTIFICACIÓN EN VIVO */}
           {liveBannerAlert && (
             <div
               onClick={() => {
@@ -1903,12 +2044,28 @@
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {renderNotificationBell()}
+                    <button
+                      type="button"
+                      onClick={() => setIsBotModalOpen(true)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border flex items-center gap-1.5 transition ${
+                        automationSettings.makeWebhookUrl && automationSettings.enabled
+                          ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
+                          : 'bg-slate-800 border-slate-700 text-cyan-300 hover:bg-slate-700'
+                      }`}
+                      title="Configurar Automatización Fantasma de WhatsApp (Make + Meta API)"
+                    >
+                      <Bot className="w-4 h-4" />
+                      🤖 Bot WhatsApp
+                      {automationSettings.makeWebhookUrl && automationSettings.enabled && (
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      )}
+                    </button>
                     <button onClick={() => setCreatorTab('tags')} className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-amber-300 border border-slate-700 flex items-center gap-1.5"><Tag className="w-4 h-4" /> Etiquetas ({tags.length})</button>
                     <button onClick={() => setCreatorTab('workers')} className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700 flex items-center gap-1.5"><Users className="w-4 h-4 text-indigo-400" /> Mercs ({workers.length})</button>
                     <button onClick={() => {
                         setEditingMission(null);
                         setNewChecklistItemText('');
-                        setMissionForm({ clientName: '', clientContact: '', missionTitle: '', gameCategory: 'Exploración de Actos', accountUser: '', accountPass: '', loginMethod: 'Kabam ID', instructions: '', priority: 'Normal', workerId: workers[0]?.id || 'unassigned', priceTotalEUR: '90', workerPayUSD: '60', paymentMethod: 'Bizum', tags: [], checklist: [] });
+                        setMissionForm({ clientName: '', clientPhone: '', clientContact: '', missionTitle: '', gameCategory: 'Exploración de Actos', accountUser: '', accountPass: '', loginMethod: 'Kabam ID', instructions: '', priority: 'Normal', workerId: workers[0]?.id || 'unassigned', priceTotalEUR: '90', workerPayUSD: '60', paymentMethod: 'Bizum', tags: [], checklist: [] });
                         setIsMissionModalOpen(true);
                       }} className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-extrabold text-white shadow-lg shadow-indigo-600/30">
                       + Nueva Misión
@@ -1970,6 +2127,7 @@
                     </div>
 
                     <div className="lg:col-span-2 space-y-6">
+                      {/* BLOQUE 1: RANKING DE MISIONES MÁS CONTRATADAS */}
                       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
                           <div><h3 className="font-extrabold text-white text-base flex items-center gap-2"><TrendingUp className="w-5 h-5 text-emerald-400" /> Ranking de Misiones Más Contratadas</h3></div>
@@ -2009,6 +2167,7 @@
                         ) : <div className="bg-slate-950 border border-slate-800 rounded-2xl p-8 text-center space-y-2"><BarChart3 className="w-10 h-10 text-slate-500 mx-auto" /><h4 className="font-bold text-white text-sm">Crea tu primera etiqueta a la izquierda</h4></div>}
                       </div>
 
+                      {/* BLOQUE 2: RANKING DE CLIENTES HABITUALES */}
                       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
                           <div>
@@ -2048,6 +2207,11 @@
                                           <span className="px-2.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-xs font-extrabold">
                                             {client.count} {client.count === 1 ? 'misión' : 'misiones'}
                                           </span>
+                                          {client.clientPhone && (
+                                            <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 text-[10px] font-mono">
+                                              📱 {formatPhoneDisplay(client.clientPhone)}
+                                            </span>
+                                          )}
                                           <button
                                             type="button"
                                             onClick={() => {
@@ -2055,7 +2219,8 @@
                                               setNewChecklistItemText('');
                                               setMissionForm({
                                                 clientName: client.clientName,
-                                                clientContact: client.clientContact || '',
+                                                clientPhone: client.clientPhone || client.clientContact || '',
+                                                clientContact: client.clientPhone || client.clientContact || '',
                                                 missionTitle: '',
                                                 gameCategory: 'Exploración de Actos',
                                                 accountUser: client.accountUser || '',
@@ -2379,6 +2544,7 @@
 
                           const assignedWorker = workers.find(w => w.id === m.workerId);
                           const assignedWorkerColor = assignedWorker ? getWorkerColorMeta(assignedWorker.color) : null;
+                          const clientPhoneDisplay = formatPhoneDisplay(m.clientPhone || m.clientContact);
 
                           return (
                             <div key={m.id} className={`bg-slate-950 rounded-xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 border border-l-4 transition ${isInProgress ? 'border-amber-500/40 border-l-amber-400 bg-amber-950/5' : isPaused ? 'border-cyan-500/40 border-l-cyan-400 bg-cyan-950/5' : isCompleted ? 'border-slate-800/90 border-l-emerald-500 opacity-90' : 'border-slate-800 border-l-indigo-500'}`}>
@@ -2409,7 +2575,11 @@
                                 <h3 className="font-extrabold text-white text-base">{m.missionTitle}</h3>
                                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
                                   <span>Cliente: <strong className="text-slate-200">{m.clientName}</strong></span>
-                                  {m.clientContact && <span className="text-slate-400">({m.clientContact})</span>}
+                                  {clientPhoneDisplay && (
+                                    <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 font-mono text-[11px]">
+                                      📱 {clientPhoneDisplay}
+                                    </span>
+                                  )}
                                   {m.completionNotes && isCompleted && <span className="text-emerald-300/90 bg-emerald-500/10 px-2 py-0.5 rounded">Nota: "{m.completionNotes}"</span>}
                                 </div>
 
@@ -2508,7 +2678,7 @@
                                 <button onClick={() => {
                                   setEditingMission(m);
                                   setNewChecklistItemText('');
-                                  setMissionForm({ clientName: m.clientName, clientContact: m.clientContact, missionTitle: m.missionTitle, gameCategory: m.gameCategory, accountUser: m.accountUser, accountPass: m.accountPass, loginMethod: m.loginMethod, instructions: m.instructions, priority: m.priority, workerId: m.workerId, priceTotalEUR: m.priceTotalEUR, workerPayUSD: m.workerPayUSD, paymentMethod: getMissionPaymentMethod(m), tags: getMissionTagIds(m), checklist: getMissionChecklist(m) });
+                                  setMissionForm({ clientName: m.clientName, clientPhone: m.clientPhone || m.clientContact || '', clientContact: m.clientPhone || m.clientContact || '', missionTitle: m.missionTitle, gameCategory: m.gameCategory, accountUser: m.accountUser, accountPass: m.accountPass, loginMethod: m.loginMethod, instructions: m.instructions, priority: m.priority, workerId: m.workerId, priceTotalEUR: m.priceTotalEUR, workerPayUSD: m.workerPayUSD, paymentMethod: getMissionPaymentMethod(m), tags: getMissionTagIds(m), checklist: getMissionChecklist(m) });
                                   setIsMissionModalOpen(true);
                                 }} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"><Edit3 className="w-4 h-4" /></button>
                                 <button onClick={() => setMissionToDelete(m)} className="p-2 rounded-lg bg-slate-800 hover:bg-rose-600 text-slate-300"><Trash2 className="w-4 h-4" /></button>
@@ -2529,6 +2699,95 @@
             )}
           </main>
 
+          {/* MODAL DE CONFIGURACIÓN DEL BOT AUTOMÁTICO DE WHATSAPP (MAKE + META API) */}
+          {isBotModalOpen && (
+            <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+                <div className="flex justify-between items-center border-b border-slate-800 px-5 py-3.5 bg-slate-900 shrink-0">
+                  <div>
+                    <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                      <Bot className="w-5 h-5 text-emerald-400" /> Bot Automático WhatsApp (Make + Meta)
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Envía WhatsApps 100% automáticos en segundo plano cuando el mercenario pausa, avanza o completa.
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setIsBotModalOpen(false)} className="text-slate-400 hover:text-white p-1">✕</button>
+                </div>
+
+                <form onSubmit={handleSaveBotSettings} className="flex-1 overflow-y-auto p-5 space-y-4">
+                  <div className="flex items-center justify-between bg-slate-950 border border-slate-800 rounded-xl p-3">
+                    <div>
+                      <span className="text-xs font-extrabold text-white block">Activar envío automático a clientes</span>
+                      <span className="text-[11px] text-slate-400">Si está activo, cada cambio disparará el aviso a Make.com</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={automationSettings.enabled}
+                      onChange={(e) => setAutomationSettings({ ...automationSettings, enabled: e.target.checked })}
+                      className="w-5 h-5 accent-emerald-500 rounded cursor-pointer"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-extrabold text-emerald-300 mb-1">
+                      URL del Custom Webhook de Make.com *
+                    </label>
+                    <input
+                      type="url"
+                      value={automationSettings.makeWebhookUrl || ''}
+                      onChange={(e) => setAutomationSettings({ ...automationSettings, makeWebhookUrl: e.target.value })}
+                      placeholder="https://hook.eu1.make.com/xxxxxxxxxxxxxxxxxxxx"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Pega aquí la dirección que te da el módulo <strong>Webhooks → Custom webhook</strong> en Make.com.
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+                    <span className="text-xs font-bold text-slate-300 block">¿Qué eventos quieres que envíen WhatsApp al cliente?</span>
+                    <label className="flex items-center justify-between text-xs text-slate-200 cursor-pointer">
+                      <span>⏸️ Cuando el mercenario <strong>Pausa la misión</strong> (Cliente puede entrar)</span>
+                      <input type="checkbox" checked={automationSettings.notifyOnPause} onChange={(e) => setAutomationSettings({ ...automationSettings, notifyOnPause: e.target.checked })} className="w-4 h-4 accent-emerald-500" />
+                    </label>
+                    <label className="flex items-center justify-between text-xs text-slate-200 cursor-pointer">
+                      <span>▶️ Cuando el mercenario <strong>Reanuda la misión</strong> (No entrar)</span>
+                      <input type="checkbox" checked={automationSettings.notifyOnResume} onChange={(e) => setAutomationSettings({ ...automationSettings, notifyOnResume: e.target.checked })} className="w-4 h-4 accent-emerald-500" />
+                    </label>
+                    <label className="flex items-center justify-between text-xs text-slate-200 cursor-pointer">
+                      <span>⚡ Cuando el mercenario <strong>Empieza por primera vez</strong></span>
+                      <input type="checkbox" checked={automationSettings.notifyOnStart} onChange={(e) => setAutomationSettings({ ...automationSettings, notifyOnStart: e.target.checked })} className="w-4 h-4 accent-emerald-500" />
+                    </label>
+                    <label className="flex items-center justify-between text-xs text-slate-200 cursor-pointer">
+                      <span>☑️ Cuando el mercenario <strong>Completa un paso de la Checklist</strong></span>
+                      <input type="checkbox" checked={automationSettings.notifyOnChecklist} onChange={(e) => setAutomationSettings({ ...automationSettings, notifyOnChecklist: e.target.checked })} className="w-4 h-4 accent-emerald-500" />
+                    </label>
+                    <label className="flex items-center justify-between text-xs text-slate-200 cursor-pointer">
+                      <span>✅ Cuando el mercenario <strong>Finaliza la misión al 100%</strong></span>
+                      <input type="checkbox" checked={automationSettings.notifyOnComplete} onChange={(e) => setAutomationSettings({ ...automationSettings, notifyOnComplete: e.target.checked })} className="w-4 h-4 accent-emerald-500" />
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={handleTestMakeWebhook}
+                      className="px-3.5 py-2.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-extrabold rounded-xl flex items-center gap-1.5 transition"
+                    >
+                      <Send className="w-3.5 h-3.5" /> Probar Conexión con Make
+                    </button>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setIsBotModalOpen(false)} className="px-4 py-2.5 bg-slate-800 text-xs font-bold rounded-xl text-slate-300">Cerrar</button>
+                      <button type="submit" className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-extrabold rounded-xl">Guardar Bot</button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL NUEVA / EDITAR MISIÓN CON CAMPO WHATSAPP DEL CLIENTE */}
           {isMissionModalOpen && (
             <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
               <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
@@ -2536,7 +2795,7 @@
                   <div>
                     <h3 className="font-extrabold text-white text-base">{editingMission ? 'Editar Misión' : 'Nueva Misión'}</h3>
                     <p className="text-[11px] text-amber-300 flex items-center gap-1 mt-0.5">
-                      <Sparkles className="w-3 h-3" /> Escribe o elige un cliente habitual para autocompletar su correo y contraseña
+                      <Sparkles className="w-3 h-3" /> Escribe o elige un cliente habitual para autocompletar su WhatsApp, correo y contraseña
                     </p>
                   </div>
                   <button type="button" onClick={() => setIsMissionModalOpen(false)} className="text-slate-400 hover:text-white p-1.5 rounded-lg bg-slate-800/60">✕</button>
@@ -2581,7 +2840,7 @@
                               <div className="min-w-0">
                                 <div className="font-bold text-xs text-white truncate">{c.clientName}</div>
                                 <div className="text-[10px] text-slate-400 font-mono truncate">
-                                  {c.accountUser || 'Sin correo guardado'}
+                                  {c.clientPhone ? `📱 ${c.clientPhone} • ` : ''}{c.accountUser || 'Sin correo'}
                                 </div>
                               </div>
                               <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-bold shrink-0">
@@ -2593,15 +2852,23 @@
                       )}
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">Contacto</label>
-                      <input type="text" value={missionForm.clientContact} onChange={(e) => setMissionForm({ ...missionForm, clientContact: e.target.value })} placeholder="WhatsApp / Discord / Telegram" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white" />
+                      <label className="block text-xs font-bold text-emerald-400 mb-1 flex items-center gap-1">
+                        <Phone className="w-3 h-3" /> WhatsApp Cliente (con prefijo) *
+                      </label>
+                      <input
+                        type="tel"
+                        value={missionForm.clientPhone || missionForm.clientContact || ''}
+                        onChange={(e) => setMissionForm({ ...missionForm, clientPhone: e.target.value, clientContact: e.target.value })}
+                        placeholder="Ej. +34600112233 o +52155..."
+                        className="w-full bg-slate-950 border border-emerald-500/40 rounded-xl px-3 py-2 text-sm font-mono text-emerald-300 focus:outline-none focus:border-emerald-400"
+                      />
                     </div>
                   </div>
 
                   {!editingMission && knownClientsDatabase.length > 0 && (
                     <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2.5 space-y-1.5">
                       <span className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1">
-                        <Sparkles className="w-3 h-3 text-amber-400" /> Clientes Frecuentes (Toca uno para autorrellenar sus credenciales):
+                        <Sparkles className="w-3 h-3 text-amber-400" /> Clientes Frecuentes (Toca uno para autorrellenar su WhatsApp y credenciales):
                       </span>
                       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
                         {knownClientsDatabase.slice(0, 8).map((c, idx) => (
@@ -2621,6 +2888,7 @@
 
                   <div><label className="block text-xs font-bold text-slate-300 mb-1">Título de la Misión *</label><input type="text" required value={missionForm.missionTitle} onChange={(e) => setMissionForm({ ...missionForm, missionTitle: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white" /></div>
 
+                  {/* CHECKLIST EDITABLE Y CONFIGURABLE DE SUBTAREAS */}
                   <div className="bg-slate-950/90 border border-indigo-500/30 rounded-xl p-3.5 space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-extrabold text-indigo-300 flex items-center gap-1.5">
@@ -2652,7 +2920,7 @@
                         ))}
                       </div>
                     ) : (
-                      <p className="text-[11px] text-slate-400">Opcional: divide misiones largas (ej. "Camino 1", "Camino 2", "Jefe Final") para que el mercenario vaya marcando su avance.</p>
+                      <p className="text-[11px] text-slate-400">Opcional: divide misiones largas (ej. "Camino 1", "Camino 2", "Jefe Final"). Al marcar cada paso se avisará al cliente por WhatsApp.</p>
                     )}
 
                     <div className="flex items-center gap-2">
