@@ -75,7 +75,18 @@
 
     const ADMIN_EMAIL = 'victorsoripar@gmail.com';
 
-    // Sintetizador de sonido para notificaciones en tiempo real (sin archivos externos)
+    // Disparador opcional de Webhook de WhatsApp vía Make.com
+    const triggerWhatsAppWebhook = async (payloadData) => {
+      try {
+        // Pon aquí la URL de tu Webhook Custom de Make si deseas llamadas directas desde cliente
+        // const webhookUrl = 'TU_WEBHOOK_URL_DE_MAKE';
+        // await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadData) });
+      } catch (e) {
+        console.warn("Webhook WhatsApp:", e);
+      }
+    };
+
+    // Sintetizador de sonido para notificaciones en tiempo real
     const playNotificationSound = (type = 'default') => {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -146,7 +157,6 @@
       return `${hrs}h ${remMins}m`;
     };
 
-    // Calcula el tiempo real de trabajo efectivo descontando el tiempo que la misión estuvo En Pausa
     const getMissionEffectiveWorkMs = (m, nowTs = Date.now()) => {
       const baseAccumulated = Number(m.accumulatedWorkMs) || 0;
       if (m.status === 'En Progreso' && m.lastResumedAt) {
@@ -218,7 +228,6 @@
       const [loginError, setLoginError] = useState('');
       const [showPwaHint, setShowPwaHint] = useState(false);
 
-      // Estados del centro de notificaciones
       const [isNotifPanelOpen, setIsNotifPanelOpen] = useState(false);
       const [soundEnabled, setSoundEnabled] = useState(true);
       const [browserNotifPermission, setBrowserNotifPermission] = useState(
@@ -441,7 +450,6 @@
         } catch (e) {}
       };
 
-      // Estadísticas de rendimiento por mercenario usando el tiempo efectivo sin contar pausas (solo visible para el Creador)
       const workerPerformanceStats = useMemo(() => {
         const stats = {};
         workers.forEach(w => {
@@ -865,6 +873,28 @@
               clientName: mission.clientName
             });
           }
+
+          // Plantilla de Meta exacta: mision_actualizada
+          triggerWhatsAppWebhook({
+            messaging_product: "whatsapp",
+            to: "34692647578",
+            type: "template",
+            template: {
+              name: "mision_actualizada",
+              language: { code: "es_ES" },
+              components: [
+                {
+                  type: "body",
+                  parameters: [
+                    { type: "text", text: mission.clientName || "Cliente" },
+                    { type: "text", text: mission.missionTitle || "Misión" },
+                    { type: "text", text: toggledItem ? toggledItem.text : "Progreso actualizado" }
+                  ]
+                }
+              ]
+            }
+          });
+
           showToast(`☑️ Progreso actualizado (${doneCount}/${updatedList.length})`);
         } catch (err) {
           console.error(err);
@@ -1105,6 +1135,28 @@
             clientName: mission.clientName
           });
         }
+
+        // Plantilla de Meta exacta: mision_iniciada (o mision_reanudada)
+        const templateToUse = isResuming ? "mision_reanudada" : "mision_iniciada";
+        triggerWhatsAppWebhook({
+          messaging_product: "whatsapp",
+          to: "34692647578",
+          type: "template",
+          template: {
+            name: templateToUse,
+            language: { code: "es_ES" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  { type: "text", text: mission.clientName || "Cliente" },
+                  { type: "text", text: mission.missionTitle || "Misión" }
+                ]
+              }
+            ]
+          }
+        });
+
         showToast(isResuming ? '▶️ Misión reanudada (Creador notificado)' : '▶️ Misión puesta En Curso (Creador notificado)');
       };
 
@@ -1132,6 +1184,27 @@
             clientName: mission.clientName
           });
         }
+
+        // Plantilla de Meta exacta: mision_pausada
+        triggerWhatsAppWebhook({
+          messaging_product: "whatsapp",
+          to: "34692647578",
+          type: "template",
+          template: {
+            name: "mision_pausada",
+            language: { code: "es_ES" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  { type: "text", text: mission.clientName || "Cliente" },
+                  { type: "text", text: mission.missionTitle || "Misión" }
+                ]
+              }
+            ]
+          }
+        });
+
         showToast('⏸️ Misión en pausa. Creador avisado de que el cliente puede entrar');
       };
 
@@ -1178,6 +1251,27 @@
             clientName: completingMission.clientName
           });
         }
+
+        // Plantilla de Meta exacta: mision_completada
+        triggerWhatsAppWebhook({
+          messaging_product: "whatsapp",
+          to: "34692647578",
+          type: "template",
+          template: {
+            name: "mision_completada",
+            language: { code: "es_ES" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  { type: "text", text: completingMission.clientName || "Cliente" },
+                  { type: "text", text: completingMission.missionTitle || "Misión" }
+                ]
+              }
+            ]
+          }
+        });
+
         showToast('✅ ¡Misión finalizada! Creador notificado');
         setCompletingMission(null);
         setCompletionNoteInput('');
@@ -1479,7 +1573,6 @@
         );
       };
 
-      // Tarjeta de Misión del Mercenario (sin mostrar el tiempo de trabajo, solo visible en el panel del Creador)
       const renderWorkerMissionCard = (m, index) => {
         const isFirst = index === 0;
         const isInProgress = m.status === 'En Progreso';
@@ -1633,7 +1726,6 @@
 
       return (
         <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-20">
-          {/* BANNER EMERGENTE SUPERIOR DE NOTIFICACIÓN EN VIVO */}
           {liveBannerAlert && (
             <div
               onClick={() => {
@@ -1878,7 +1970,6 @@
                     </div>
 
                     <div className="lg:col-span-2 space-y-6">
-                      {/* BLOQUE 1: RANKING DE MISIONES MÁS CONTRATADAS */}
                       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
                           <div><h3 className="font-extrabold text-white text-base flex items-center gap-2"><TrendingUp className="w-5 h-5 text-emerald-400" /> Ranking de Misiones Más Contratadas</h3></div>
@@ -1918,7 +2009,6 @@
                         ) : <div className="bg-slate-950 border border-slate-800 rounded-2xl p-8 text-center space-y-2"><BarChart3 className="w-10 h-10 text-slate-500 mx-auto" /><h4 className="font-bold text-white text-sm">Crea tu primera etiqueta a la izquierda</h4></div>}
                       </div>
 
-                      {/* BLOQUE 2: RANKING DE CLIENTES HABITUALES */}
                       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
                           <div>
@@ -2439,11 +2529,9 @@
             )}
           </main>
 
-          {/* MODAL NUEVA / EDITAR MISIÓN CON CABECERA Y PIE FIJOS + SCROLL INTERNO INDEPENDIENTE */}
           {isMissionModalOpen && (
             <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
               <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
-                {/* Cabecera fija arriba: siempre visible */}
                 <div className="flex justify-between items-center border-b border-slate-800 px-5 py-3.5 bg-slate-900 shrink-0">
                   <div>
                     <h3 className="font-extrabold text-white text-base">{editingMission ? 'Editar Misión' : 'Nueva Misión'}</h3>
@@ -2454,7 +2542,6 @@
                   <button type="button" onClick={() => setIsMissionModalOpen(false)} className="text-slate-400 hover:text-white p-1.5 rounded-lg bg-slate-800/60">✕</button>
                 </div>
 
-                {/* Cuerpo desplazable interno con scroll garantizado de arriba a abajo */}
                 <form
                   onSubmit={handleSaveMission}
                   className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4"
@@ -2534,7 +2621,6 @@
 
                   <div><label className="block text-xs font-bold text-slate-300 mb-1">Título de la Misión *</label><input type="text" required value={missionForm.missionTitle} onChange={(e) => setMissionForm({ ...missionForm, missionTitle: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white" /></div>
 
-                  {/* CHECKLIST EDITABLE Y CONFIGURABLE DE SUBTAREAS */}
                   <div className="bg-slate-950/90 border border-indigo-500/30 rounded-xl p-3.5 space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-extrabold text-indigo-300 flex items-center gap-1.5">
