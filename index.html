@@ -383,18 +383,18 @@
         if (eventType === 'checklist_step' && !automationSettings.notifyOnChecklist) return;
         if (eventType === 'mission_completed' && !automationSettings.notifyOnComplete) return;
 
-        // Textos automáticos listos para enviar o inyectar como variables {{1}}, {{2}}, {{3}} en Meta
+        // Textos automáticos listos para enviar o inyectar como variables
         let fullMessageText = '';
         if (eventType === 'mission_started') {
-          fullMessageText = `¡Hola ${mission.clientName}! 🎮 Nuestro mercenario acaba de entrar a tu cuenta para empezar la misión "${mission.missionTitle}". Por favor, no abras el juego mientras esté en curso para evitar desconexiones. ¡Te avisaremos por aquí en cuanto pausemos o terminemos!`;
+          fullMessageText = `▶️ MENSAJE AUTOMATICO: Hola "${mission.clientName}". Vuelvo a entrar a tu cuenta para continuar con la misión "${mission.missionTitle}". Por favor, no entres al juego hasta que te llegue un mensaje de PAUSA, y si te he sacado de la cuenta, ya no vuelvas a entrar tampoco. 😏`;
         } else if (eventType === 'mission_paused') {
-          fullMessageText = `¡Hola ${mission.clientName}! ⏸️ Hemos puesto en pausa temporalmente tu misión "${mission.missionTitle}". Tienes tu cuenta 100% libre para entrar a jugar con normalidad. Te avisaremos por aquí cuando volvamos a retomarla.`;
+          fullMessageText = `⏸️ MENSAJE AUTOMATICO: Hola "${mission.clientName}". He puesto en pausa temporalmente tu mision "${mission.missionTitle}". Tienes la cuenta 100% libre para entrar a jugar con normalidad. Te llegará otro mensaje por aquí cuando vuelva a retomarla! 😋`;
         } else if (eventType === 'mission_resumed') {
-          fullMessageText = `¡Hola ${mission.clientName}! ▶️ Nuestro mercenario vuelve a entrar a tu cuenta para continuar con la misión "${mission.missionTitle}". Por favor, no entres al juego hasta nuevo aviso.`;
+          fullMessageText = `▶️ MENSAJE AUTOMATICO: Hola "${mission.clientName}". Vuelvo a entrar a tu cuenta para continuar con la misión "${mission.missionTitle}". Por favor, no entres al juego hasta que te llegue un mensaje de PAUSA, y si te he sacado de la cuenta, ya no vuelvas a entrar tampoco. 😏`;
         } else if (eventType === 'checklist_step') {
-          fullMessageText = `¡Hola ${mission.clientName}! ☑️ Nuevo avance en tu misión "${mission.missionTitle}": acabamos de completar "${stepDetail}" (Progreso total: ${progressText}). ¡Seguimos avanzando!`;
+          fullMessageText = `☑️ MENSAJE AUTOMATICO: Hola "${mission.clientName}". Nuevo avance en tu misión "${mission.missionTitle}": Acabo de completar "${stepDetail}" (Progreso Total: ${progressText}). Por favor, no entres al juego hasta que te llegue un mensaje de PAUSA. 😁`;
         } else if (eventType === 'mission_completed') {
-          fullMessageText = `¡Hola ${mission.clientName}! 🚀 ¡Enhorabuena! Tu misión "${mission.missionTitle}" ya está 100% COMPLETADA. Ya puedes entrar a tu cuenta y disfrutar de las recompensas. ¡Muchas gracias por tu confianza!`;
+          fullMessageText = `💯✅🚀 MENSAJE AUTOMATICO: Hola "${mission.clientName}"!! Enhorabuena! Tu misión "${mission.missionTitle}" ya está 100% COMPLETADA. Ya puedes entrar a tu cuenta y disfrutar de las recompensas. Muchas Gracias por tu confianza!! Te espero para la siguiente! 🤯😉`;
         }
 
         const now = Date.now();
