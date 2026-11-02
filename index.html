@@ -490,27 +490,7 @@
       };
 
       const isCreatorSession = authUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-const currentIsolatedWorker = useMemo(() => {
-        if (!authUser || isCreatorSession) return null;
-        const userEmail = (authUser.email || '').toLowerCase().trim();
-        
-        // 1. Busca el mercenario por su correo exacto o en minúsculas en Firestore
-        let found = workers.find(w => (w.email || '').toLowerCase().trim() === userEmail);
-        
-        // 2. Si no lo encuentra por correo exacto, busca por coincidencia parcial (por si acaso)
-        if (!found) {
-          found = workers.find(w => userEmail.includes((w.name || '').toLowerCase()) || (w.email || '').toLowerCase().includes(userEmail));
-        }
-
-        // 3. Si aún así no existe en Firestore, le asigna su perfil real basado en su email
-        return found || {
-          id: authUser.uid,
-          name: authUser.email.split('@')[0].toUpperCase(),
-          email: authUser.email,
-          specialty: 'Mercenario',
-          color: 'from-indigo-500 to-purple-600'
-        };
-      }, [workers, authUser, isCreatorSession]);
+      const currentIsolatedWorker = workers.find(w => w.email?.toLowerCase() === authUser?.email?.toLowerCase()) || null;
       const isolatedWorkerId = currentIsolatedWorker ? currentIsolatedWorker.id : null;
 
       const currentRecipientKey = isCreatorSession ? 'creator' : (isolatedWorkerId || null);
