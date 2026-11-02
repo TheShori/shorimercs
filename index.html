@@ -490,7 +490,21 @@
       };
 
       const isCreatorSession = authUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-      const currentIsolatedWorker = workers.find(w => w.email?.toLowerCase() === authUser?.email?.toLowerCase()) || null;
+      // BÚSQUEDA ROBUSTA: Si es el admin entra directo. Si es mercenario, busca su correo; y si la base de datos aún está cargando, le genera un perfil temporal para evitar el bloqueo
+      const currentIsolatedWorker = useMemo(() => {
+        if (!authUser || isCreatorSession) return null;
+        const userEmail = (authUser.email || '').toLowerCase().trim();
+        const found = workers.find(w => (w.email || '').toLowerCase().trim() === userEmail);
+        if (found) return found;
+        // Si Firestore aún no ha descargado los mercs pero el usuario está autenticado, evitamos el bloqueo creando un perfil temporal inmediato
+        return {
+          id: authUser.uid,
+          name: authUser.email.split('@')[0].toUpperCase(),
+          email: authUser.email,
+          specialty: 'Mercenario',
+          color: 'from-indigo-500 to-purple-600'
+        };
+      }, [workers, authUser, isCreatorSession]);
       const isolatedWorkerId = currentIsolatedWorker ? currentIsolatedWorker.id : null;
 
       const currentRecipientKey = isCreatorSession ? 'creator' : (isolatedWorkerId || null);
