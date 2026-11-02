@@ -490,14 +490,20 @@
       };
 
       const isCreatorSession = authUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-      // BÚSQUEDA ROBUSTA: Si es el admin entra directo. Si es mercenario, busca su correo; y si la base de datos aún está cargando, le genera un perfil temporal para evitar el bloqueo
-      const currentIsolatedWorker = useMemo(() => {
+const currentIsolatedWorker = useMemo(() => {
         if (!authUser || isCreatorSession) return null;
         const userEmail = (authUser.email || '').toLowerCase().trim();
-        const found = workers.find(w => (w.email || '').toLowerCase().trim() === userEmail);
-        if (found) return found;
-        // Si Firestore aún no ha descargado los mercs pero el usuario está autenticado, evitamos el bloqueo creando un perfil temporal inmediato
-        return {
+        
+        // 1. Busca el mercenario por su correo exacto o en minúsculas en Firestore
+        let found = workers.find(w => (w.email || '').toLowerCase().trim() === userEmail);
+        
+        // 2. Si no lo encuentra por correo exacto, busca por coincidencia parcial (por si acaso)
+        if (!found) {
+          found = workers.find(w => userEmail.includes((w.name || '').toLowerCase()) || (w.email || '').toLowerCase().includes(userEmail));
+        }
+
+        // 3. Si aún así no existe en Firestore, le asigna su perfil real basado en su email
+        return found || {
           id: authUser.uid,
           name: authUser.email.split('@')[0].toUpperCase(),
           email: authUser.email,
