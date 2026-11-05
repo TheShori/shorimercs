@@ -1803,7 +1803,7 @@ function App() {
               </div>
               <div className="bg-slate-900 p-2.5 rounded-lg flex items-center justify-between text-xs">
                 <span className="font-mono text-amber-300 break-all">{visibleCredentials[m.id] ? (decryptPassword(m.accountPass) || 'Sin contraseña') : '••••••••••••'}</span>
-                <button onClick={() => copyToClipboard(m.accountPass, 'Contraseña')} className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold shrink-0 ml-2">Copiar</button>
+                <button onClick={() => copyToClipboard(decryptPassword(m.accountPass), 'Contraseña')} className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold shrink-0 ml-2">Copiar</button>
               </div>
             </div>
 
@@ -2651,7 +2651,7 @@ function App() {
                                       {isPassVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                     </button>
                                     {m.accountPass && (
-                                      <button onClick={() => copyToClipboard(m.accountPass, 'Contraseña')} className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-bold flex items-center gap-0.5 transition" title="Copiar contraseña">
+                                      <button onClick={() => copyToClipboard(decryptPassword(m.accountPass), 'Contraseña')} className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-bold flex items-center gap-0.5 transition" title="Copiar contraseña">
                                         <Copy className="w-2.5 h-2.5" /> Copiar
                                       </button>
                                     )}
