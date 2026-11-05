@@ -52,7 +52,7 @@
     } from 'lucide-react';
 
     import { initializeApp } from "firebase/app";
-    import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
+    import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from "firebase/firestore";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 
     const firebaseConfig = {
@@ -313,12 +313,6 @@
       useEffect(() => {
         if (!db || !authUser) return;
 
-        const unsubMissions = onSnapshot(collection(db, "missions"), (snapshot) => {
-          const cloudMissions = [];
-          snapshot.forEach((docSnap) => cloudMissions.push({ id: docSnap.id, ...docSnap.data() }));
-          setMissions(cloudMissions);
-        });
-
         const unsubWorkers = onSnapshot(collection(db, "workers"), (snapshot) => {
           const cloudWorkers = [];
           snapshot.forEach((docSnap) => cloudWorkers.push({ id: docSnap.id, ...docSnap.data() }));
@@ -344,13 +338,35 @@
         });
 
         return () => {
-          unsubMissions();
           unsubWorkers();
           unsubTags();
           unsubNotifications();
           unsubSettings();
         };
       }, [authUser]);
+
+      useEffect(() => {
+        if (!db || !authUser) return;
+        const isAdmin = authUser.email?.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim();
+        const myWorker = workers.find(w => (w.email || '').toLowerCase().trim() === (authUser.email || '').toLowerCase().trim());
+
+        if (!isAdmin && !myWorker) {
+          setMissions([]);
+          return;
+        }
+
+        const missionsQuery = isAdmin
+          ? collection(db, "missions")
+          : query(collection(db, "missions"), where("workerId", "==", myWorker.id));
+
+        const unsubMissions = onSnapshot(missionsQuery, (snapshot) => {
+          const cloudMissions = [];
+          snapshot.forEach((docSnap) => cloudMissions.push({ id: docSnap.id, ...docSnap.data() }));
+          setMissions(cloudMissions);
+        });
+
+        return () => unsubMissions();
+      }, [authUser, workers]);
 
       const showToast = (msg) => {
         setToastMessage({ text: msg });
