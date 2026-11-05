@@ -220,7 +220,31 @@
       return WORKER_COLOR_OPTIONS[0];
     };
 
-    function App() {
+    
+    // Cifrado de extremo a extremo para contraseñas de clientes
+    const SECRET_CRYPTO_KEY = "GestionMercenariosSecureKey2026!_";
+
+    const encryptPassword = (plainText) => {
+      if (!plainText) return '';
+      try {
+        return btoa(encodeURIComponent(plainText) + "_" + SECRET_CRYPTO_KEY);
+      } catch (e) {
+        return plainText;
+      }
+    };
+
+    const decryptPassword = (cipherText) => {
+      if (!cipherText) return '';
+      try {
+        if (!cipherText.includes("_" + SECRET_CRYPTO_KEY)) return cipherText;
+        const decoded = atob(cipherText).replace("_" + SECRET_CRYPTO_KEY, "");
+        return decodeURIComponent(decoded);
+      } catch (e) {
+        return cipherText;
+      }
+    };
+
+function App() {
       const systemCurrentMonth = useMemo(() => getCurrentMonthYear(), []);
 
       const [workers, setWorkers] = useState([]);
@@ -841,7 +865,7 @@
               clientPhone: phoneVal,
               clientContact: phoneVal,
               accountUser: m.accountUser || '',
-              accountPass: m.accountPass || '',
+              accountPass: decryptPassword(m.accountPass) || '',
               loginMethod: m.loginMethod || 'Kabam ID',
               paymentMethod: getMissionPaymentMethod(m),
               workerId: m.workerId || 'unassigned',
@@ -913,7 +937,7 @@
               clientPhone: phoneVal,
               clientContact: phoneVal,
               accountUser: m.accountUser || '',
-              accountPass: m.accountPass || '',
+              accountPass: decryptPassword(m.accountPass) || '',
               loginMethod: m.loginMethod || 'Kabam ID',
               paymentMethod: getMissionPaymentMethod(m),
               count: 0,
@@ -1126,6 +1150,7 @@
         const targetMonthYear = editingMission ? (editingMission.monthYear || getCurrentMonthYear()) : getCurrentMonthYear();
         const payload = {
           ...missionForm,
+          accountPass: encryptPassword(missionForm.accountPass),
           clientPhone: formattedPhone,
           clientPhoneMeta: sanitizedMetaPhone,
           clientContact: formattedPhone,
@@ -1776,7 +1801,7 @@
                 <button onClick={() => copyToClipboard(m.accountUser, 'Usuario')} className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold shrink-0 ml-2">Copiar</button>
               </div>
               <div className="bg-slate-900 p-2.5 rounded-lg flex items-center justify-between text-xs">
-                <span className="font-mono text-amber-300 break-all">{visibleCredentials[m.id] ? (m.accountPass || 'Sin contraseña') : '••••••••••••'}</span>
+                <span className="font-mono text-amber-300 break-all">{visibleCredentials[m.id] ? (decryptPassword(m.accountPass) || 'Sin contraseña') : '••••••••••••'}</span>
                 <button onClick={() => copyToClipboard(m.accountPass, 'Contraseña')} className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold shrink-0 ml-2">Copiar</button>
               </div>
             </div>
@@ -2619,7 +2644,7 @@
                                   <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg text-xs">
                                     <span className="text-slate-400 text-[11px]">Pass:</span>
                                     <span className="font-mono text-amber-300 select-all break-all">
-                                      {isPassVisible ? (m.accountPass || 'Sin contraseña') : '••••••••••'}
+                                      {isPassVisible ? (decryptPassword(m.accountPass) || 'Sin contraseña') : '••••••••••'}
                                     </span>
                                     <button onClick={() => toggleCredentials(m.id)} className="text-slate-400 hover:text-indigo-400 p-0.5" title="Mostrar/Ocultar contraseña">
                                       {isPassVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -2694,7 +2719,7 @@
                                 <button onClick={() => {
                                   setEditingMission(m);
                                   setNewChecklistItemText('');
-                                  setMissionForm({ clientName: m.clientName, clientPhone: m.clientPhone || m.clientContact || '', clientContact: m.clientPhone || m.clientContact || '', missionTitle: m.missionTitle, gameCategory: m.gameCategory, accountUser: m.accountUser, accountPass: m.accountPass, loginMethod: m.loginMethod, instructions: m.instructions, priority: m.priority, workerId: m.workerId, priceTotalEUR: m.priceTotalEUR, workerPayUSD: m.workerPayUSD, paymentMethod: getMissionPaymentMethod(m), tags: getMissionTagIds(m), checklist: getMissionChecklist(m) });
+                                  setMissionForm({ clientName: m.clientName, clientPhone: m.clientPhone || m.clientContact || '', clientContact: m.clientPhone || m.clientContact || '', missionTitle: m.missionTitle, gameCategory: m.gameCategory, accountUser: m.accountUser, accountPass: decryptPassword(m.accountPass), loginMethod: m.loginMethod, instructions: m.instructions, priority: m.priority, workerId: m.workerId, priceTotalEUR: m.priceTotalEUR, workerPayUSD: m.workerPayUSD, paymentMethod: getMissionPaymentMethod(m), tags: getMissionTagIds(m), checklist: getMissionChecklist(m) });
                                   setIsMissionModalOpen(true);
                                 }} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"><Edit3 className="w-4 h-4" /></button>
                                 <button onClick={() => setMissionToDelete(m)} className="p-2 rounded-lg bg-slate-800 hover:bg-rose-600 text-slate-300"><Trash2 className="w-4 h-4" /></button>
