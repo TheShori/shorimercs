@@ -1432,14 +1432,15 @@ function App() {
             lastResumedAt: null,
             accumulatedWorkMs: totalEffectiveMs,
             checklist: updatedChecklist,
-            completionNotes: finalNote
+            completionNotes: finalNote,
+            accountPass: "🔒 [CONTRASEÑA DESTRUIDA POR SEGURIDAD]"
           }, { merge: true });
 
           const workerName = currentIsolatedWorker?.name || 'Un mercenario';
           await pushCloudNotification({
             recipient: 'creator',
             title: `✅ ¡${workerName} completó una misión!`,
-            message: `${workerName} ha finalizado "${completingMission.missionTitle}" (Cliente: ${completingMission.clientName} • Tiempo efectivo: ${formatDuration(totalEffectiveMs)}). Nota: "${finalNote}"`,
+            message: `${workerName} ha finalizado "${completingMission.missionTitle}" (Cliente: ${completingMission.clientName} • Contraseña destruida por seguridad).`,
             eventType: 'completed',
             missionTitle: completingMission.missionTitle,
             clientName: completingMission.clientName
@@ -1452,7 +1453,7 @@ function App() {
             notes: finalNote
           });
         }
-        showToast('✅ ¡Misión finalizada! Cliente y Creador notificados');
+        showToast('✅ ¡Misión finalizada! Contraseña destruida de la BD por seguridad');
         setCompletingMission(null);
         setCompletionNoteInput('');
       };
