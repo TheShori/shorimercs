@@ -244,6 +244,29 @@
       }
     };
 
+
+    const getCountryInfoFromPhone = (phoneStr) => {
+      if (!phoneStr) return { name: 'Desconocido', flag: '❓' };
+      const clean = String(phoneStr).replace(/[^\d]/g, '');
+      if (clean.startsWith('34')) return { name: 'España', flag: 'ES' };
+      if (clean.startsWith('52')) return { name: 'México', flag: 'MX' };
+      if (clean.startsWith('54')) return { name: 'Argentina', flag: 'AR' };
+      if (clean.startsWith('57')) return { name: 'Colombia', flag: 'CO' };
+      if (clean.startsWith('51')) return { name: 'Perú', flag: 'PE' };
+      if (clean.startsWith('56')) return { name: 'Chile', flag: 'CL' };
+      if (clean.startsWith('58')) return { name: 'Venezuela', flag: 'VE' };
+      if (clean.startsWith('1')) return { name: 'Estados Unidos / Canadá', flag: 'US' };
+      if (clean.startsWith('33')) return { name: 'Francia', flag: 'FR' };
+      if (clean.startsWith('44')) return { name: 'Reino Unido', flag: 'GB' };
+      if (clean.startsWith('49')) return { name: 'Alemania', flag: 'DE' };
+      if (clean.startsWith('39')) return { name: 'Italia', flag: 'IT' };
+      if (clean.startsWith('55')) return { name: 'Brasil', flag: 'BR' };
+      if (clean.startsWith('593')) return { name: 'Ecuador', flag: 'EC' };
+      if (clean.startsWith('598')) return { name: 'Uruguay', flag: 'UY' };
+      if (clean.startsWith('503')) return { name: 'El Salvador', flag: 'SV' };
+      return { name: 'Internacional', flag: 'INT' };
+    };
+
 function App() {
       const systemCurrentMonth = useMemo(() => getCurrentMonthYear(), []);
 
@@ -286,7 +309,7 @@ function App() {
       const [tagFilter, setTagFilter] = useState('ALL');
       const [workerFilter, setWorkerFilter] = useState('ALL');
       const [paymentFilter, setPaymentFilter] = useState('ALL');
-      const [monthFilter, setMonthFilter] = useState(systemCurrentMonth);
+      const [monthFilter, setMonthFilter] = useState('ALL');
       const [tagStatsPeriod, setTagStatsPeriod] = useState('ALL');
       const [searchQuery, setSearchQuery] = useState('');
 
@@ -653,7 +676,7 @@ function App() {
         workers.forEach(w => {
           const wMissions = missions.filter(m => m.workerId === w.id);
           const completedMissions = wMissions.filter(m => m.status === 'Completada');
-          const currentMonthCompleted = completedMissions.filter(m => m.monthYear === monthFilter);
+          const currentMonthCompleted = monthFilter === 'ALL' ? completedMissions : completedMissions.filter(m => m.monthYear === monthFilter);
           const activeQueueCount = wMissions.filter(m => m.status === 'En Progreso' || m.status === 'En Pausa' || m.status === 'Pendiente').length;
 
           const missionsEarnedUSD = completedMissions.reduce((acc, m) => {
@@ -754,7 +777,7 @@ function App() {
 
       const creatorMissionCounts = useMemo(() => {
         const base = missions.filter(m => {
-          if (m.monthYear !== monthFilter) return false;
+          if (monthFilter !== 'ALL' && m.monthYear !== monthFilter) return false;
           if (tagFilter !== 'ALL' && !getMissionTagIds(m).includes(tagFilter)) return false;
           if (workerFilter !== 'ALL' && m.workerId !== workerFilter) return false;
           if (paymentFilter !== 'ALL' && getMissionPaymentMethod(m) !== paymentFilter) return false;
@@ -773,7 +796,7 @@ function App() {
       const creatorFilteredMissions = useMemo(() => {
         return missions
           .filter(m => {
-            if (m.monthYear !== monthFilter) return false;
+            if (monthFilter !== 'ALL' && m.monthYear !== monthFilter) return false;
             if (statusFilter === 'ACTIVE') {
               if (m.status !== 'Pendiente' && m.status !== 'En Progreso' && m.status !== 'En Pausa') return false;
             } else if (statusFilter !== 'ALL' && m.status !== statusFilter) return false;
@@ -916,7 +939,61 @@ function App() {
         showToast(`⚡ Datos y WhatsApp de ${clientData.clientName} autocompletados`);
       };
 
-      const clientAnalytics = useMemo(() => {
+      
+      const countryAnalytics = useMemo(() => {
+        const filteredMissions = tagStatsPeriod === 'ALL' ? missions : missions.filter(m => m.monthYear === tagStatsPeriod);
+        const totalMissionsInPeriod = filteredMissions.length;
+        const map = new Map();
+
+        filteredMissions.forEach(m => {
+          const rawName = (m.clientName || '').trim();
+          if (!rawName || isExcludedInternalClient(rawName)) return;
+          const phoneVal = m.clientPhone || m.clientContact || '';
+          const cInfo = getCountryInfoFromPhone(phoneVal);
+          const key = cInfo.name;
+
+          const rev = Number(m.priceTotalEUR) || 0;
+          const costUSD = Number(m.originalWorkerPayUSD !== undefined ? m.originalWorkerPayUSD : m.workerPayUSD) || 0;
+
+          if (!map.has(key)) {
+            map.set(key, {
+              countryName: cInfo.name,
+              flag: cInfo.flag,
+              count: 0,
+              revenueEUR: 0,
+              workerCostUSD: 0
+            });
+          }
+
+          const item = map.get(key);
+          item.count += 1;
+          item.revenueEUR += rev;
+          item.workerCostUSD += costUSD;
+        });
+
+        const statsList = Array.from(map.values()).map(item => {
+          const workerCostEUR = item.workerCostUSD * 0.92;
+          const netProfitEUR = item.revenueEUR - workerCostEUR;
+          const percentage = totalMissionsInPeriod > 0 ? Math.round((item.count / totalMissionsInPeriod) * 100) : 0;
+          return {
+            ...item,
+            workerCostEUR,
+            netProfitEUR,
+            percentage
+          };
+        });
+
+        statsList.sort((a, b) => {
+          if (b.count !== a.count) return b.count - a.count;
+          return b.revenueEUR - a.revenueEUR;
+        });
+
+        const maxCount = statsList.length > 0 ? Math.max(...statsList.map(s => s.count), 1) : 1;
+
+        return { statsList, maxCount, totalCountries: statsList.length };
+      }, [missions, tagStatsPeriod]);
+
+const clientAnalytics = useMemo(() => {
         const filteredMissions = tagStatsPeriod === 'ALL' ? missions : missions.filter(m => m.monthYear === tagStatsPeriod);
         const totalMissionsInPeriod = filteredMissions.length;
         const map = new Map();
@@ -1222,7 +1299,7 @@ function App() {
               });
             }
           }
-          setMonthFilter(targetMonthYear);
+          if (monthFilter !== 'ALL') setMonthFilter(targetMonthYear);
           if (statusFilter === 'Completada') setStatusFilter('ACTIVE');
           showToast(`✅ Misión registrada (${payload.paymentMethod})`);
         }
@@ -2116,67 +2193,39 @@ function App() {
                   </div>
                 </div>
 
-                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 max-w-2xl overflow-x-auto no-scrollbar">
+                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 max-w-3xl overflow-x-auto no-scrollbar">
                   <button onClick={() => setCreatorTab('missions')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${creatorTab === 'missions' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>📋 Gestión de Misiones</button>
-                  <button onClick={() => setCreatorTab('tags')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${creatorTab === 'tags' ? 'bg-amber-500 text-slate-950 font-extrabold' : 'text-slate-400 hover:text-slate-200'}`}>🏷️ Etiquetas y Top Ventas</button>
+                  <button onClick={() => setCreatorTab('ranking')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${creatorTab === 'ranking' ? 'bg-amber-500 text-slate-950 font-extrabold' : 'text-slate-400 hover:text-slate-200'}`}>🏆 Top Ventas y Clientes</button>
+                  <button onClick={() => setCreatorTab('tags')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${creatorTab === 'tags' ? 'bg-amber-500 text-slate-950 font-extrabold' : 'text-slate-400 hover:text-slate-200'}`}>🏷️ Etiquetas ({tags.length})</button>
                   <button onClick={() => setCreatorTab('finances')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${creatorTab === 'finances' ? 'bg-emerald-600 text-slate-950 font-extrabold' : 'text-slate-400 hover:text-slate-200'}`}>💶 Finanzas Mensuales</button>
                   <button onClick={() => setCreatorTab('workers')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${creatorTab === 'workers' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>👥 Gestión de Mercs</button>
                 </div>
 
-                {creatorTab === 'tags' ? (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5 h-fit">
-                      <div><h3 className="font-extrabold text-white text-base flex items-center gap-2"><Tag className="w-4 h-4 text-amber-400" /> {editingTag ? 'Editar Etiqueta' : 'Crear Nueva Etiqueta'}</h3></div>
-                      <form onSubmit={handleSaveTag} className="space-y-4">
-                        <div>
-                          <label className="block text-xs font-bold text-slate-300 mb-1">Nombre de la Etiqueta *</label>
-                          <input type="text" required value={tagForm.name} onChange={(e) => setTagForm({ ...tagForm, name: e.target.value })} placeholder="Ej. Acto 9.1" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500" />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-slate-300 mb-2">Color de Etiqueta</label>
-                          <div className="grid grid-cols-2 gap-2">
-                            {TAG_COLOR_OPTIONS.map(c => (
-                              <button key={c.id} type="button" onClick={() => setTagForm({ ...tagForm, color: c.id })} className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-2 transition ${tagForm.color === c.id ? `${c.badgeClass} ring-2 ring-white/30` : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}>
-                                <span className={`w-2.5 h-2.5 rounded-full ${c.barClass}`} />{c.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          {editingTag && <button type="button" onClick={() => { setEditingTag(null); setTagForm({ name: '', color: 'indigo' }); }} className="flex-1 py-2.5 bg-slate-800 text-xs font-bold rounded-xl text-slate-300">Cancelar</button>}
-                          <button type="submit" className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-xl transition shadow-lg shadow-amber-500/20">{editingTag ? 'Guardar Cambios' : '+ Crear Etiqueta'}</button>
-                        </div>
-                      </form>
-                      <div className="pt-4 border-t border-slate-800 space-y-2.5">
-                        <span className="text-xs font-bold uppercase text-slate-400 block">Mis Etiquetas Activas ({tags.length})</span>
-                        {tags.length > 0 ? (
-                          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                            {tags.map(t => {
-                              const colorMeta = getTagColorMeta(t.color);
-                              return (
-                                <div key={t.id} className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between gap-2">
-                                  <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border flex items-center gap-1.5 ${colorMeta.badgeClass}`}><Tag className="w-3 h-3" /> {t.name}</span>
-                                  <div className="flex items-center gap-1">
-                                    <button onClick={() => { setEditingTag(t); setTagForm({ name: t.name, color: t.color || 'indigo' }); }} className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300"><Edit3 className="w-3.5 h-3.5" /></button>
-                                    <button onClick={() => setTagToDelete(t)} className="p-1.5 rounded-lg bg-slate-900 hover:bg-rose-600 text-slate-300 hover:text-white"><Trash2 className="w-3.5 h-3.5" /></button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : <p className="text-xs text-slate-500 italic">Aún no has creado ninguna etiqueta.</p>}
+                {creatorTab === 'ranking' ? (
+                  <div className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-2xl p-4">
+                      <div>
+                        <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                          <TrendingUp className="w-5 h-5 text-emerald-400" /> Estadísticas de Ventas y Clientes VIP
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Consulta de un vistazo tus misiones más rentables y los clientes que más te contratan.</p>
                       </div>
+                      <select value={tagStatsPeriod} onChange={(e) => setTagStatsPeriod(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs font-bold text-amber-300">
+                        <option value="ALL">🌎 Histórico Global (Todos los meses)</option>
+                        {availableMonths.map(m => <option key={m} value={m}>📅 Solo {m}</option>)}
+                      </select>
                     </div>
 
-                    <div className="lg:col-span-2 space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       {/* BLOQUE 1: RANKING DE MISIONES MÁS CONTRATADAS */}
-                      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
-                          <div><h3 className="font-extrabold text-white text-base flex items-center gap-2"><TrendingUp className="w-5 h-5 text-emerald-400" /> Ranking de Misiones Más Contratadas</h3></div>
-                          <select value={tagStatsPeriod} onChange={(e) => setTagStatsPeriod(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-amber-300">
-                            <option value="ALL">🌎 Histórico Global (Todos los meses)</option>
-                            {availableMonths.map(m => <option key={m} value={m}>📅 Solo {m}</option>)}
-                          </select>
+                      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5 h-fit">
+                        <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                          <div>
+                            <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                              <TrendingUp className="w-5 h-5 text-emerald-400" /> Ranking de Misiones Más Contratadas
+                            </h3>
+                            <p className="text-xs text-slate-400 mt-0.5">Desglose de ingresos y beneficio neto por etiqueta.</p>
+                          </div>
                         </div>
                         {tagAnalytics.statsList.length > 0 ? (
                           <div className="space-y-3">
@@ -2186,7 +2235,7 @@ function App() {
                               return (
                                 <div key={stat.id} className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
                                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2.5">
+                                    <div className="flex items-center gap-2.5 flex-wrap">
                                       <span className="w-6 h-6 rounded-lg bg-slate-900 border border-slate-800 text-xs font-extrabold text-slate-300 flex items-center justify-center">#{idx + 1}</span>
                                       <span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border flex items-center gap-1.5 ${colorMeta.badgeClass}`}><Tag className="w-3 h-3" /> {stat.name}</span>
                                       <span className="text-xs font-extrabold text-white">{stat.count} veces</span>
@@ -2206,11 +2255,17 @@ function App() {
                               );
                             })}
                           </div>
-                        ) : <div className="bg-slate-950 border border-slate-800 rounded-2xl p-8 text-center space-y-2"><BarChart3 className="w-10 h-10 text-slate-500 mx-auto" /><h4 className="font-bold text-white text-sm">Crea tu primera etiqueta a la izquierda</h4></div>}
+                        ) : (
+                          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-8 text-center space-y-2">
+                            <BarChart3 className="w-10 h-10 text-slate-500 mx-auto" />
+                            <h4 className="font-bold text-white text-sm">Aún no hay etiquetas creadas</h4>
+                            <button onClick={() => setCreatorTab('tags')} className="mt-2 px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/30">Ir a crear etiquetas</button>
+                          </div>
+                        )}
                       </div>
 
                       {/* BLOQUE 2: RANKING DE CLIENTES HABITUALES */}
-                      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">
+                      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5 h-fit">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
                           <div>
                             <h3 className="font-extrabold text-white text-base flex items-center gap-2">
@@ -2323,6 +2378,129 @@ function App() {
                           </div>
                         )}
                       </div>
+
+
+                      {/* BLOQUE 3: RANKING DE PAÍSES POR TELÉFONO */}
+                      <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">
+                        <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                          <div>
+                            <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                              🌍 Ranking de Países de Clientes ({countryAnalytics.totalCountries})
+                            </h3>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              Detectado automáticamente por el prefijo telefónico del cliente.
+                            </p>
+                          </div>
+                        </div>
+
+                        {countryAnalytics.statsList.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {countryAnalytics.statsList.map((c, idx) => {
+                              const barWidth = c.count > 0 ? Math.max(Math.round((c.count / countryAnalytics.maxCount) * 100), 10) : 5;
+                              return (
+                                <div key={c.countryName} className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                    <div className="flex items-center gap-2.5">
+                                      <span className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 text-xs font-extrabold text-amber-300 flex items-center justify-center shrink-0">
+                                        {c.flag}
+                                      </span>
+                                      <div>
+                                        <div className="font-extrabold text-white text-sm">{c.countryName}</div>
+                                        <div className="text-[11px] text-indigo-300 font-bold">{c.count} {c.count === 1 ? 'misión' : 'misiones'} ({c.percentage}%)</div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5 text-xs flex-wrap">
+                                      <span className="font-extrabold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Ingreso: €{c.revenueEUR}</span>
+                                      <span className="font-bold text-rose-400 bg-rose-500/10 px-2 py-1 rounded border border-rose-500/20">Mercs: ${c.workerCostUSD}</span>
+                                      <span className={`font-extrabold px-2 py-1 rounded border ${c.netProfitEUR >= 0 ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'}`}>
+                                        Puro: €{c.netProfitEUR.toFixed(2)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden">
+                                    <div className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 rounded-full transition-all duration-500" style={{ width: `${barWidth}%` }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 text-center text-xs text-slate-400">
+                            Aún no hay datos de teléfonos de clientes en este periodo.
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  </div>
+                ) : creatorTab === 'tags' ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5 h-fit">
+                      <div>
+                        <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                          <Tag className="w-4 h-4 text-amber-400" /> {editingTag ? 'Editar Etiqueta' : 'Crear Nueva Etiqueta'}
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-1">Crea etiquetas personalizadas para clasificar tus misiones y medir cuáles se venden más.</p>
+                      </div>
+                      <form onSubmit={handleSaveTag} className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-300 mb-1">Nombre de la Etiqueta *</label>
+                          <input type="text" required value={tagForm.name} onChange={(e) => setTagForm({ ...tagForm, name: e.target.value })} placeholder="Ej. Acto 9.1, Necrópolis..." className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-300 mb-2">Color de Etiqueta</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {TAG_COLOR_OPTIONS.map(c => (
+                              <button key={c.id} type="button" onClick={() => setTagForm({ ...tagForm, color: c.id })} className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-2 transition ${tagForm.color === c.id ? `${c.badgeClass} ring-2 ring-white/30` : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}>
+                                <span className={`w-2.5 h-2.5 rounded-full ${c.barClass}`} />{c.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {editingTag && <button type="button" onClick={() => { setEditingTag(null); setTagForm({ name: '', color: 'indigo' }); }} className="flex-1 py-2.5 bg-slate-800 text-xs font-bold rounded-xl text-slate-300">Cancelar</button>}
+                          <button type="submit" className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-xl transition shadow-lg shadow-amber-500/20">{editingTag ? 'Guardar Cambios' : '+ Crear Etiqueta'}</button>
+                        </div>
+                      </form>
+                    </div>
+
+                    <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 h-fit">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div>
+                          <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                            <Tag className="w-4 h-4 text-amber-400" /> Mis Etiquetas Activas ({tags.length})
+                          </h3>
+                          <p className="text-xs text-slate-400 mt-0.5">Puedes editar el nombre o color de cualquier etiqueta en cualquier momento.</p>
+                        </div>
+                      </div>
+                      {tags.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {tags.map(t => {
+                            const colorMeta = getTagColorMeta(t.color);
+                            const countUses = missions.filter(m => getMissionTagIds(m).includes(t.id)).length;
+                            return (
+                              <div key={t.id} className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border flex items-center gap-1.5 truncate ${colorMeta.badgeClass}`}>
+                                    <Tag className="w-3 h-3 shrink-0" /> <span className="truncate">{t.name}</span>
+                                  </span>
+                                  <span className="text-[11px] text-slate-500 font-bold shrink-0">({countUses} misiones)</span>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button onClick={() => { setEditingTag(t); setTagForm({ name: t.name, color: t.color || 'indigo' }); }} className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300" title="Editar etiqueta"><Edit3 className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => setTagToDelete(t)} className="p-1.5 rounded-lg bg-slate-900 hover:bg-rose-600 text-slate-300 hover:text-white" title="Eliminar etiqueta"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="bg-slate-950 border border-slate-800 rounded-2xl p-8 text-center space-y-2">
+                          <Tag className="w-10 h-10 text-slate-500 mx-auto" />
+                          <h4 className="font-bold text-white text-sm">Aún no has creado ninguna etiqueta</h4>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : creatorTab === 'finances' ? (
@@ -2481,7 +2659,7 @@ function App() {
                               <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2 text-xs">
                                 <div className="flex items-center justify-between">
                                   <span className="text-slate-400 flex items-center gap-1.5">
-                                    <Award className="w-3.5 h-3.5 text-emerald-400" /> Comp. ({monthFilter}):
+                                    <Award className="w-3.5 h-3.5 text-emerald-400" /> Comp. ({monthFilter === 'ALL' ? 'Todos los meses' : monthFilter}):
                                   </span>
                                   <span className="font-extrabold text-emerald-400">{stats.completedThisMonth} misiones</span>
                                 </div>
@@ -2561,7 +2739,7 @@ function App() {
                         <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar por cliente, correo o misión..." className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 font-bold">{availableMonths.map(m => <option key={m} value={m}>📅 {m}</option>)}</select>
+                        <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 font-bold"><option value="ALL">📅 Todos los meses</option>{availableMonths.map(m => <option key={m} value={m}>📅 {m}</option>)}</select>
                         <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 font-bold">
                           <option value="ALL">💳 Bizum + PayPal</option>
                           <option value="Bizum">🔴 Solo Bizum</option>
