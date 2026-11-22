@@ -52,8 +52,9 @@
     } from 'lucide-react';
 
     import { initializeApp } from "firebase/app";
-    import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from "firebase/firestore";
+    import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where } from "firebase/firestore";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+    import { decryptPassword, legacyPasswordPatch } from './legacy-credentials.js?v=save-v1';
 
     const firebaseConfig = {
       apiKey: "AIzaSyA-MMvUt9IvYSHwcFbC0M3K9PdXtlf2gZU",
@@ -232,28 +233,6 @@
     };
 
     // Cifrado de extremo a extremo para contraseñas de clientes
-    const SECRET_CRYPTO_KEY = "GestionMercenariosSecureKey2026!_";
-
-    const encryptPassword = (plainText) => {
-      if (!plainText) return '';
-      try {
-        return btoa(encodeURIComponent(plainText) + "_" + SECRET_CRYPTO_KEY);
-      } catch (e) {
-        return plainText;
-      }
-    };
-
-    const decryptPassword = (cipherText) => {
-      if (!cipherText) return '';
-      try {
-        if (!cipherText.includes("_" + SECRET_CRYPTO_KEY)) return cipherText;
-        const decoded = atob(cipherText).replace("_" + SECRET_CRYPTO_KEY, "");
-        return decodeURIComponent(decoded);
-      } catch (e) {
-        return cipherText;
-      }
-    };
-
     const getCountryInfoFromPhone = (phoneStr) => {
       if (!phoneStr) return { name: 'Desconocido', flag: '❓' };
       const clean = String(phoneStr).replace(/[^\d]/g, '');
@@ -1544,10 +1523,15 @@
         const sanitizedMetaPhone = sanitizePhoneForMeta(rawPhoneInput);
         const formattedPhone = sanitizedMetaPhone ? `+${sanitizedMetaPhone}` : rawPhoneInput;
 
+        // La contraseña solo se incluye si el administrador la cambia.
+        let passwordPatch;
+        try { passwordPatch = legacyPasswordPatch(missionForm.accountPass, editingMission); }
+        catch (error) { showToast(error.message); return; }
+        const { accountPass: ignoredPassword, ...formWithoutPassword } = missionForm;
         const targetMonthYear = editingMission ? (editingMission.monthYear || getCurrentMonthYear()) : getCurrentMonthYear();
         const payload = {
-          ...missionForm,
-          accountPass: encryptPassword(missionForm.accountPass),
+          ...formWithoutPassword,
+          ...passwordPatch,
           clientPhone: formattedPhone,
           clientPhoneMeta: sanitizedMetaPhone,
           clientContact: formattedPhone,
@@ -1564,7 +1548,14 @@
           const nextWorkerId = payload.workerId || 'unassigned';
 
           if (db) {
-            await setDoc(doc(db, "missions", editingMission.id), { ...editingMission, ...payload }, { merge: true });
+            try {
+              // No reenvia estado, temporizadores ni credenciales de la copia abierta.
+              // updateDoc falla si la mision fue borrada mientras estaba abierto el formulario.
+              await updateDoc(doc(db, "missions", editingMission.id), payload);
+            } catch {
+              showToast('⚠️ No se pudo confirmar el guardado. Actualiza el listado antes de continuar.');
+              return;
+            }
 
             if (prevWorkerId !== nextWorkerId) {
               if (prevWorkerId !== 'unassigned') {
