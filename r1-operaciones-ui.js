@@ -26,26 +26,25 @@ export function useMissionR1(authUser,enabled){
  return {...view,error:error||view.error||view.syncError,pending:!!view.pending,hasLast:!!view.last,secrets:view===EMPTY?{}:secrets,isAdmin:authUser?.email?.toLowerCase()===ADMIN,load:()=>call('load',authUser?.email?.toLowerCase()===ADMIN),setRun:id=>call('setRun',id),retry:()=>call('retry'),save:(...a)=>call('save',...a),mutate:(...a)=>call('mutate',...a),batch:(...a)=>call('batch',...a),extra:(action,data,expectedRevision)=>call('execute',{action,data,expectedRevision,runId:'00000000-0000-4000-8000-000000000001',requestId:crypto.randomUUID()}),reveal,hide,clearSecrets,isManaged};
 }
 export function R1IntegrationBar({r1}){
- const safe=fn=>()=>Promise.resolve().then(fn).catch(()=>{});
- if(!r1.isAdmin){
-  if(!r1.pending)return null;
-  return h('div',{role:'alert',className:'max-w-3xl mx-auto px-4 py-3 text-sm'},h('p',null,'No se ha confirmado tu último cambio.'),h('button',{className:button,disabled:r1.busy,onClick:safe(r1.retry)},'Comprobar guardado'));
- }
- return h('section',{className:'max-w-7xl mx-auto px-4 pt-4'},h('div',{className:'rounded-xl border border-amber-500 bg-slate-900 p-4 space-y-3'},
- h('h2',{className:'text-lg font-bold text-amber-300'},r1.isAdmin?'Operaciones comerciales':'Misiones'),
- r1.isAdmin?h('p',null,'Los cambios afectan a las misiones reales. WhatsApp: '+(r1.dispatchEnabled?'activo para eventos nuevos.':'pausado; los avisos retenidos no se enviarán al activarlo.')):null,
- r1.isAdmin?h('button',{className:button,disabled:r1.busy||r1.pending||r1.refreshing,onClick:safe(r1.load)},'Actualizar ahora'):null,
- r1.error?h('p',{role:'alert',className:'text-rose-300'},r1.error):null,
- h('p',{role:'status'},r1.pending?'Actualización automática en pausa: resuelve la petición pendiente.':r1.connected?'Conectado · '+r1.missions.length+' misiones · Actualización automática cada 30 s':r1.error?'Pendiente de reconexión automática.':'Conectando automáticamente…'),
- r1.pending?h('button',{className:button,disabled:r1.busy,onClick:safe(r1.retry)},'Reanudar la misma petición'):null,
- r1.isAdmin&&r1.delivery?.length?h('details',null,h('summary',null,'Últimos avisos'),...r1.delivery.map(d=>h('p',{key:d.id,className:'text-sm'},d.missionId+' · '+d.type+' · '+({held:'Retenido',queued:'Pendiente',attempting:'Sin confirmación; no se reenvía',accepted:'Aceptado por WhatsApp',unknown:'Sin confirmación; revisar',not_sent:'No enviado',expired:'Caducado',disabled:'Desactivado',invalid_phone:'Teléfono no válido'}[d.status]||d.status)))):null,
- r1.result?h('p',{role:'status'},'Confirmado: '+r1.result.status+' · '+r1.result.action):null));
+ if(!r1.pending)return null;
+ const retry=()=>Promise.resolve().then(r1.retry).catch(()=>{});
+ return h('div',{role:'alert',className:'max-w-3xl mx-auto px-4 py-3 text-sm'},h('p',null,'No se ha confirmado tu último cambio.'),h('button',{className:button,disabled:r1.busy,onClick:retry},'Comprobar guardado'));
+}
+export function R1DeliveryPanel({r1}){
+ if(!r1.isAdmin)return null;
+ const states={held:'Retenido',queued:'Pendiente',attempting:'Sin confirmación',accepted:'Aceptado por WhatsApp',unknown:'Sin confirmación; revisar',not_sent:'No enviado',expired:'Caducado',disabled:'Desactivado',invalid_phone:'Teléfono no válido'};
+ const events={mission_started:'Inicio',mission_resumed:'Reanudación',mission_paused:'Pausa',checklist_step:'Avance',mission_completed:'Finalización'};
+ return h('section',{className:'bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3'},
+  h('h3',{className:'font-bold text-white'},'Últimos avisos'),
+  r1.delivery?.length?h('ul',{className:'space-y-2'},...r1.delivery.map(d=>h('li',{key:d.id,className:'rounded-lg bg-slate-950 p-3 text-sm'},
+   h('strong',null,r1.missions.find(m=>m.id===d.missionId)?.missionTitle||'Misión no disponible'),
+   h('p',{className:'text-slate-300'},(events[d.type]||'Aviso')+' · '+(states[d.status]||'Pendiente de revisión')),
+   Number.isFinite(d.at)?h('p',{className:'text-xs text-slate-400'},new Date(d.at).toLocaleString('es-ES')):null))):h('p',{className:'text-sm text-slate-400'},'No hay avisos recientes.'));
 }
 export function R1CredentialCard({r1,mission}){
  if(!isManaged(mission))return null;const c=r1.secrets[mission.id];
  const copy=value=>navigator.clipboard.writeText(value).catch(()=>alert('No se pudo copiar. Selecciona el valor visible.'));
  return h('div',{className:'rounded-xl border border-indigo-500/40 bg-slate-950 p-3 space-y-2 text-sm'},
-  h('strong',{className:'inline-block mr-3'},r1.isAdmin?'Credencial · '+mission.credentialState:'Correo y Contraseña'),
-  c?h('div',{className:'space-y-2'},h('p',{className:'break-all font-mono'},c.username),h('p',{className:'break-all font-mono text-amber-200'},c.password),h('div',{className:'flex flex-wrap gap-2'},h('button',{className:button,type:'button',onClick:()=>copy(c.username)},'Copiar usuario'),h('button',{className:button,type:'button',onClick:()=>copy(c.password)},'Copiar contraseña'),h('button',{className:button,type:'button',onClick:()=>r1.hide(mission.id)},'Ocultar'))):h('button',{className:button,type:'button',disabled:r1.busy||r1.pending||!r1.connected||mission.credentialState!=='stored'||mission.status==='Completada',onClick:()=>r1.reveal(mission).catch(()=>{})},r1.isAdmin?'Revelar durante 15 s':'Revelar'),
-  r1.isAdmin?h('p',{className:'text-xs text-slate-400'},'Se oculta al perder el foco o en 15 segundos. El portapapeles no se borra automáticamente.'):null);
+  h('strong',{className:'inline-block mr-3'},'Correo y Contraseña'),
+  c?h('div',{className:'space-y-2'},h('p',{className:'break-all font-mono'},c.username),h('p',{className:'break-all font-mono text-amber-200'},c.password),h('div',{className:'flex flex-wrap gap-2'},h('button',{className:button,type:'button',onClick:()=>copy(c.username)},'Copiar usuario'),h('button',{className:button,type:'button',onClick:()=>copy(c.password)},'Copiar contraseña'),h('button',{className:button,type:'button',onClick:()=>r1.hide(mission.id)},'Ocultar'))):h('button',{className:button,type:'button',disabled:r1.busy||r1.pending||!r1.connected||mission.credentialState!=='stored'||mission.status==='Completada',onClick:()=>r1.reveal(mission).catch(()=>{})},'Revelar'));
 }

@@ -67,7 +67,7 @@
     // WHATSAPP_CENTER_1D7: UI separada, sin escrituras.
 
     // R1_INTEGRATION_TEST: formularios existentes; almacenamiento separado.
-    import { useMissionR1, R1IntegrationBar, R1CredentialCard } from './r1-operaciones-ui.js?v=4-clean';
+    import { useMissionR1, R1IntegrationBar, R1CredentialCard, R1DeliveryPanel } from './r1-operaciones-ui.js?v=6-clean-all';
 
     // This entry point must never fall through to the production write branches.
     if (location.origin !== 'https://theshori.github.io' || !['/shorimercs/','/shorimercs/index.html'].includes(location.pathname)) throw Error('Abre la dirección habitual de GestiónMercenarios.');
@@ -2527,7 +2527,7 @@
 
                 {creatorTab === 'whatsappCenter' && IS_TEST_GITHUB ? (
 
-                  <p className="text-sm text-amber-200">Consulta «Últimos avisos» en el panel superior. Actualiza para ver su estado; aceptado no confirma la entrega al destinatario.</p>
+                  <R1DeliveryPanel r1={r1} />
 
                 ) : creatorTab === 'ranking' ? (
                   <div className="space-y-6">
