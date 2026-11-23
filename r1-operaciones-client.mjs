@@ -32,7 +32,7 @@ export function makeTransport({getUser,isCurrent,fetcher=fetch,locationCheck=()=
   try{response=await fetcher(NAS_ORIGIN+'/api/r1/commercial-live',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:text,cache:'no-store',redirect:'error',signal:c.signal});data=await response.json();}
   catch{const e=Error('Resultado no confirmado. Usa «Reanudar la misma petición» sin cerrar esta pestaña.');e.uncertain=true;throw e;}finally{clearTimeout(timer);}
   if(!isCurrent()||getUser()?.uid!==u.uid)fail('La sesión cambió.');
-  if(!response.ok){const messages={STALE_VERSION:'La misión cambió. Actualiza y revisa el formulario antes de guardar.',STALE_BATCH:'Las misiones cambiaron. Actualiza y revisa de nuevo la liquidación.',STALE_WORKER:'El perfil cambió. Actualiza antes de continuar.',UNPAID_WORKER:'Liquida primero el saldo de este perfil.',RUN_COUNT_LIMIT:'Se alcanzó el límite de misiones. No crees otro; conserva este identificador.',KEY:'El NAS no puede cargar la clave de servicio comercial.',NO_CREDENTIAL:'La credencial ya no está disponible.',RATE_LIMIT:'Espera un minuto y reanuda la misma petición.',RUN_UNAVAILABLE:'El servicio aún no está activado. Completa la migración en el NAS.',TWO_LINKED_WORKERS_REQUIRED:'Se necesitan al menos dos perfiles activos y vinculados.'};const e=Error(messages[data.code]||data.error||'Consulta rechazada: '+response.status);e.code=data.code;e.uncertain=response.status>=500||response.status===429;throw e;}
+  if(!response.ok){const messages={DB_QUOTA:'La base de datos ha alcanzado su cuota. Se reintentará automáticamente cuando vuelva a estar disponible.',STALE_VERSION:'La misión cambió. Actualiza y revisa el formulario antes de guardar.',STALE_BATCH:'Las misiones cambiaron. Actualiza y revisa de nuevo la liquidación.',STALE_WORKER:'El perfil cambió. Actualiza antes de continuar.',UNPAID_WORKER:'Liquida primero el saldo de este perfil.',RUN_COUNT_LIMIT:'Se alcanzó el límite de misiones. No crees otro; conserva este identificador.',KEY:'El NAS no puede cargar la clave de servicio comercial.',NO_CREDENTIAL:'La credencial ya no está disponible.',RATE_LIMIT:'Espera un minuto y reanuda la misma petición.',RUN_UNAVAILABLE:'El servicio aún no está activado. Completa la migración en el NAS.',TWO_LINKED_WORKERS_REQUIRED:'Se necesitan al menos dos perfiles activos y vinculados.'};const e=Error(messages[data.code]||data.error||'Consulta rechazada: '+response.status);e.code=data.code;e.retryAfterMs=data.code==='DB_QUOTA'?900000:0;e.uncertain=response.status>=500||response.status===429;throw e;}
   if(typeof data.willSend!=='boolean'||data.commercialWrites!==true){const e=Error('Respuesta fuera del servicio comercial. No continúes.');e.uncertain=true;throw e;}
   return data;
  };
@@ -53,7 +53,7 @@ export class RehearsalClient{
   this.syncing=true;this.state.runId='00000000-0000-4000-8000-000000000001';this.emit({refreshing:true});
   try{return await this.refresh();}catch(e){
    const auth=['AUTH','FORBIDDEN'].includes(e.code);
-   this.emit({connected:false,syncError:auth?'La sesión no permite actualizar. Vuelve a iniciar sesión.':'No se pudo actualizar. Se reintentará automáticamente.',...(auth?{missions:[],workers:[],tags:[],templates:[],notifications:[],delivery:[]}:{} )});throw e;
+   this.emit({connected:false,syncError:e.code==='DB_QUOTA'?e.message:auth?'La sesión no permite actualizar. Vuelve a iniciar sesión.':'No se pudo actualizar. Se reintentará automáticamente.',...(auth?{missions:[],workers:[],tags:[],templates:[],notifications:[],delivery:[]}:{} )});throw e;
   }finally{this.syncing=false;this.emit({refreshing:false});}
  }
  async load(admin){if(this.state.busy)return;if(this.state.pending)fail('Reanuda primero la petición pendiente.');
@@ -96,7 +96,7 @@ export function startAutoSync(client,{windowTarget=window,documentTarget=documen
   if(now()<nextAllowed){schedule(nextAllowed-now());return;}
   if(client.state.busy||client.state.pending||client.syncing){schedule(intervalMs);return;}
   running=true;
-  try{await client.sync();failures=0;nextAllowed=0;}catch{failures++;nextAllowed=now()+Math.min(120000,intervalMs*Math.pow(2,Math.min(failures-1,2)));}
+  try{await client.sync();failures=0;nextAllowed=0;}catch(e){failures++;nextAllowed=now()+Math.max(e?.code==='DB_QUOTA'?900000:0,Math.min(120000,intervalMs*Math.pow(2,Math.min(failures-1,2))));}
   finally{running=false;schedule(Math.max(intervalMs,nextAllowed-now()));}
  }
  const wake=()=>{cancel();if(!stopped&&!running&&visible()&&online())schedule(Math.max(200,nextAllowed-now()));};

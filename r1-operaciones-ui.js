@@ -1,5 +1,5 @@
 import React,{useState,useRef,useEffect,useCallback} from 'react';
-import {RehearsalClient,makeTransport,isManaged,ADMIN,UUID,startAutoSync} from './r1-operaciones-client.mjs?v=2-auto';
+import {RehearsalClient,makeTransport,isManaged,ADMIN,UUID,startAutoSync} from './r1-operaciones-client.mjs?v=10-cuota';
 const h=React.createElement;
 const button='rounded-lg px-3 py-2 text-sm font-bold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40';
 const EMPTY={runId:'',missions:[],workers:[],tags:[],busy:false,connected:false,pending:null,last:null,result:null,error:''};
@@ -26,7 +26,13 @@ export function useMissionR1(authUser,enabled){
  return {...view,error:error||view.error||view.syncError,pending:!!view.pending,hasLast:!!view.last,secrets:view===EMPTY?{}:secrets,isAdmin:authUser?.email?.toLowerCase()===ADMIN,load:()=>call('load',authUser?.email?.toLowerCase()===ADMIN),setRun:id=>call('setRun',id),retry:()=>call('retry'),save:(...a)=>call('save',...a),mutate:(...a)=>call('mutate',...a),batch:(...a)=>call('batch',...a),extra:(action,data,expectedRevision)=>call('execute',{action,data,expectedRevision,runId:'00000000-0000-4000-8000-000000000001',requestId:crypto.randomUUID()}),reveal,hide,clearSecrets,isManaged};
 }
 export function R1IntegrationBar({r1}){
- if(!r1.pending)return null;
+ if(!r1.pending){
+  if(r1.connected)return null;
+  return h('section',{role:r1.error?'alert':'status',className:'max-w-3xl mx-auto my-8 p-6 rounded-2xl bg-slate-900 border border-slate-700'},
+   h('h2',{className:'text-xl font-bold mb-2'},r1.error?'No se pueden cargar las misiones':'Cargando misiones…'),
+   h('p',{className:'text-slate-300'},r1.error||'Espera un momento. La conexión es automática.'),
+   r1.error?h('p',{className:'text-sm text-slate-400 mt-3'},'La página volverá a intentarlo automáticamente.'):null);
+ }
  const retry=()=>Promise.resolve().then(r1.retry).catch(()=>{});
  return h('div',{role:'alert',className:'max-w-3xl mx-auto px-4 py-3 text-sm'},h('p',null,'No se ha confirmado tu último cambio.'),h('button',{className:button,disabled:r1.busy,onClick:retry},'Comprobar guardado'));
 }
