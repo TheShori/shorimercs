@@ -67,7 +67,7 @@
     // WHATSAPP_CENTER_1D7: UI separada, sin escrituras.
 
     // R1_INTEGRATION_TEST: formularios existentes; almacenamiento separado.
-    import { useMissionR1, R1IntegrationBar, R1CredentialCard } from './r1-operaciones-ui.js?v=1';
+    import { useMissionR1, R1IntegrationBar, R1CredentialCard } from './r1-operaciones-ui.js?v=4-clean';
 
     // This entry point must never fall through to the production write branches.
     if (location.origin !== 'https://theshori.github.io' || !['/shorimercs/','/shorimercs/index.html'].includes(location.pathname)) throw Error('Abre la dirección habitual de GestiónMercenarios.');
@@ -527,7 +527,7 @@
         }
       };
 
-      useEffect(() => {if(r1.connected&&r1.automationSettings)setAutomationSettings({...r1.automationSettings,makeWebhookUrl:''});}, [r1.automationSettings]);
+      useEffect(() => {if(!isBotModalOpen&&r1.connected&&r1.automationSettings)setAutomationSettings({...r1.automationSettings,makeWebhookUrl:''});}, [r1.automationSettings,isBotModalOpen]);
 
       const handleSaveBotSettings = async (e) => {
         e.preventDefault();

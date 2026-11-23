@@ -38,20 +38,30 @@ export function makeTransport({getUser,isCurrent,fetcher=fetch,locationCheck=()=
  };
 }
 export class RehearsalClient{
- constructor({send,runId='',uuid=()=>crypto.randomUUID(),onChange=()=>{},onRun=()=>{},seedRequestId=''}){this.send=send;this.uuid=uuid;this.onChange=onChange;this.onRun=onRun;this.seedRequestId=seedRequestId;this.active=true;this.state={runId,missions:[],workers:[],tags:[],connected:false,busy:false,pending:null,last:null,result:null,error:''};}
+ constructor({send,runId='',uuid=()=>crypto.randomUUID(),onChange=()=>{},onRun=()=>{},seedRequestId=''}){this.send=send;this.uuid=uuid;this.onChange=onChange;this.onRun=onRun;this.seedRequestId=seedRequestId;this.active=true;this.readSequence=0;this.syncing=false;this.state={runId,missions:[],workers:[],tags:[],connected:false,busy:false,refreshing:false,lastUpdated:null,syncError:'',pending:null,last:null,result:null,error:''};}
  emit(patch){if(!this.active)return;Object.assign(this.state,patch);this.onChange({...this.state});}
- dispose(){this.active=false;this.state.pending=null;this.state.last=null;this.state.missions=[];}
+ dispose(){this.active=false;this.readSequence++;this.state.pending=null;this.state.last=null;this.state.missions=[];}
  setRun(id){if(this.state.busy||this.state.pending)fail('Resuelve primero la petición pendiente.');if(id&&!UUID.test(id))fail('El identificador de servicio comercial no es válido.');this.seedRequestId='';this.onRun(id,'');this.emit({runId:id,missions:[],workers:[],tags:[],connected:false,last:null,result:null,error:''});}
- async refresh(){const r=await this.send({action:'list',runId:this.state.runId});if(!this.active)return;
+ async refresh(){const sequence=++this.readSequence;let r;
+  try{r=await this.send({action:'list',runId:this.state.runId});}catch(e){if(!this.active||sequence!==this.readSequence)return;throw e;}
+  if(!this.active||sequence!==this.readSequence)return;
   if(r.status!=='listed'||r.apiVersion!==VERSION||r.scope!==SCOPE||r.runId!==this.state.runId||!Array.isArray(r.missions)||!r.missions.every(isManaged)||!Array.isArray(r.workers)||!Array.isArray(r.tags))fail('Respuesta de listado no válida.');
-  this.emit({missions:r.missions.map(viewMission),workers:r.workers,tags:r.tags,templates:r.templates||[],notifications:r.notifications||[],automationSettings:r.automationSettings||{},dispatchEnabled:r.dispatchEnabled===true,delivery:r.delivery||[],connected:true});return r;
+  this.emit({missions:r.missions.map(viewMission),workers:r.workers,tags:r.tags,templates:r.templates||[],notifications:r.notifications||[],automationSettings:r.automationSettings||{},dispatchEnabled:r.dispatchEnabled===true,delivery:r.delivery||[],connected:true,lastUpdated:Date.now(),syncError:''});return r;
+ }
+ async sync(){
+  if(!this.active||this.syncing||this.state.busy||this.state.pending)return;
+  this.syncing=true;this.state.runId='00000000-0000-4000-8000-000000000001';this.emit({refreshing:true});
+  try{return await this.refresh();}catch(e){
+   const auth=['AUTH','FORBIDDEN'].includes(e.code);
+   this.emit({connected:false,syncError:auth?'La sesión no permite actualizar. Vuelve a iniciar sesión.':'No se pudo actualizar. Se reintentará automáticamente.',...(auth?{missions:[],workers:[],tags:[],templates:[],notifications:[],delivery:[]}:{} )});throw e;
+  }finally{this.syncing=false;this.emit({refreshing:false});}
  }
  async load(admin){if(this.state.busy)return;if(this.state.pending)fail('Reanuda primero la petición pendiente.');
   this.state.runId='00000000-0000-4000-8000-000000000001';
   this.emit({busy:true,error:''});try{return await this.refresh();}catch(e){this.emit({error:e.message,connected:false});throw e;}finally{this.emit({busy:false});}
  }
  async execute(command){if(!this.active)fail('La sesión cambió.');if(this.state.busy)fail('Hay otra operación en curso.');if(this.state.pending&&this.state.pending.requestId!==command.requestId)fail('Resuelve primero la petición pendiente.');
-  this.emit({busy:true,error:'',result:null});
+  this.readSequence++;this.emit({busy:true,error:'',result:null});
   try{const r=await this.send(command);if(!this.active)return;
    const expected=command.action==='seed'?['seeded','duplicate']:['committed','duplicate','no_change'];
    if(!expected.includes(r.status)||r.apiVersion!==VERSION||r.scope!==SCOPE||r.runId!==command.runId||(command.action!=='seed'&&(r.requestId!==command.requestId||r.action!==command.action))){const e=Error('Respuesta no reconocida. Reanuda la misma petición.');e.uncertain=true;throw e;}
@@ -74,4 +84,24 @@ export class RehearsalClient{
  }
  retry(){const c=this.state.pending||this.state.last;if(!c)fail('No hay una petición anterior.');return this.execute(c);}
  async reveal(m){if(!isManaged(m)||!this.state.connected||this.state.busy||this.state.pending)fail('Actualiza el servicio comercial y resuelve cualquier petición pendiente.');this.emit({busy:true,error:''});try{const r=await this.send({action:'reveal',runId:this.state.runId,missionId:m.id});if(!this.active)return;if(r.status!=='revealed'||!r.credential)fail('Credencial no disponible.');return r.credential;}catch(e){this.emit({error:e.message});throw e;}finally{this.emit({busy:false});}}
+}
+
+// Automatic reads only: never replay a mutation or a pending command.
+export function startAutoSync(client,{windowTarget=window,documentTarget=document,online=()=>navigator.onLine!==false,intervalMs=30000,setTimer=setTimeout,clearTimer=clearTimeout,now=Date.now}={}){
+ let stopped=false,timer=null,running=false,failures=0,nextAllowed=0;
+ const visible=()=>documentTarget.visibilityState!=='hidden';
+ const cancel=()=>{if(timer!==null)clearTimer(timer);timer=null;};
+ function schedule(delay){cancel();if(!stopped&&visible()&&online())timer=setTimer(tick,delay);}
+ async function tick(){timer=null;if(stopped||!client.active||running||!visible()||!online())return;
+  if(now()<nextAllowed){schedule(nextAllowed-now());return;}
+  if(client.state.busy||client.state.pending||client.syncing){schedule(intervalMs);return;}
+  running=true;
+  try{await client.sync();failures=0;nextAllowed=0;}catch{failures++;nextAllowed=now()+Math.min(120000,intervalMs*Math.pow(2,Math.min(failures-1,2)));}
+  finally{running=false;schedule(Math.max(intervalMs,nextAllowed-now()));}
+ }
+ const wake=()=>{cancel();if(!stopped&&!running&&visible()&&online())schedule(Math.max(200,nextAllowed-now()));};
+ for(const event of ['focus','online','offline'])windowTarget.addEventListener(event,wake);
+ documentTarget.addEventListener('visibilitychange',wake);
+ void tick();
+ return ()=>{stopped=true;cancel();for(const event of ['focus','online','offline'])windowTarget.removeEventListener(event,wake);documentTarget.removeEventListener('visibilitychange',wake);};
 }
