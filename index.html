@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Misiones Gaming</title>
+  <title>Misiones · Operaciones comerciales R1</title>
 
   <!-- CONFIGURACIÓN PWA -->
   <meta name="theme-color" content="#020617" />
@@ -15,10 +15,10 @@
   <!-- Icono Gaming -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='120' fill='%230f172a'/%3E%3Crect x='24' y='24' width='464' height='464' rx='100' fill='none' stroke='%236366f1' stroke-width='20'/%3E%3Cpath d='M145 367L367 145M367 145H280M367 145V232' stroke='%2310b981' stroke-width='36' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M367 367L145 145M145 145H232M145 145V232' stroke='%236366f1' stroke-width='36' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='120' fill='%230f172a'/%3E%3Crect x='24' y='24' width='464' height='464' rx='100' fill='none' stroke='%236366f1' stroke-width='20'/%3E%3Cpath d='M145 367L367 145M367 145H280M367 145V232' stroke='%2310b981' stroke-width='36' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M367 367L145 145M145 145H232M145 145V232' stroke='%236366f1' stroke-width='36' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
-  
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
+
   <script type="importmap">
     {
       "imports": {
@@ -39,23 +39,40 @@
 </head>
 <body class="bg-slate-950 text-slate-100 select-none sm:select-auto">
   <div id="root"></div>
+  <div id="gmerc-test-warning" style="display:none;position:fixed;left:10px;bottom:10px;z-index:9999;max-width:460px;padding:10px 14px;border-radius:10px;background:#7c2d12;color:#fff;font:600 12px/1.4 system-ui;box-shadow:0 6px 18px #0009;pointer-events:none">
+    🧪 OPERACIONES REALES · Avisos retenidos
+  </div>
+  <script>
+    if (location.hostname === 'theshori.github.io' && location.pathname.startsWith('/TEST-shorimercs/')) {
+      document.getElementById('gmerc-test-warning').style.display = 'block';
+    }
+  </script>
 
   <script type="text/babel" data-type="module">
     import React, { useState, useEffect, useMemo, useRef } from 'react';
     import { createRoot } from 'react-dom/client';
-    import { 
-      Shield, Sword, CheckCircle2, Clock, Plus, Copy, Eye, EyeOff, Play, Pause, Check, 
-      Trash2, Edit3, Search, Smartphone, DollarSign, Euro, LogOut, Lock, Crown, 
+    import {
+      Shield, Sword, CheckCircle2, Clock, Plus, Copy, Eye, EyeOff, Play, Pause, Check,
+      Trash2, Edit3, Search, Smartphone, DollarSign, Euro, LogOut, Lock, Crown,
       Calendar, CreditCard, History, Users, Tag, BarChart3, TrendingUp, ArrowUp, Key, Sparkles,
       Bell, BellRing, Volume2, VolumeX, CheckCheck, MessageCircle, Activity, Award, Timer, ListChecks,
       Bot, Send, Phone, BookmarkPlus, Bookmark, PieChart, Wallet, Percent, Layers
     } from 'lucide-react';
 
     import { initializeApp } from "firebase/app";
-    import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where } from "firebase/firestore";
+    
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
-    import { decryptPassword, legacyPasswordPatch } from './legacy-credentials.js?v=save-v1';
+    const decryptPassword = () => '';
+    const legacyPasswordPatch = () => blockedWrite();
+    // WHATSAPP_CENTER_1D7: UI separada, sin escrituras.
 
+    // R1_INTEGRATION_TEST: formularios existentes; almacenamiento separado.
+    import { useMissionR1, R1IntegrationBar, R1CredentialCard } from './r1-operaciones-ui.js?v=1';
+
+    // This entry point must never fall through to the production write branches.
+    if (location.origin !== 'https://theshori.github.io' || !['/shorimercs/','/shorimercs/index.html'].includes(location.pathname)) throw Error('Abre la dirección habitual de GestiónMercenarios.');
+    const blockedWrite = () => { throw Error('Escritura directa deshabilitada; usa el servicio.'); };
+    const setDoc = blockedWrite, updateDoc = blockedWrite, deleteDoc = blockedWrite; const collection=blockedWrite,doc=blockedWrite,onSnapshot=blockedWrite,query=blockedWrite,where=blockedWrite;
     const firebaseConfig = {
       apiKey: "AIzaSyA-MMvUt9IvYSHwcFbC0M3K9PdXtlf2gZU",
       authDomain: "gestionmercenarios.firebaseapp.com",
@@ -69,13 +86,17 @@
     let auth = null;
     try {
       const app = initializeApp(firebaseConfig);
-      db = getFirestore(app);
+      
       auth = getAuth(app);
     } catch (e) {
       console.warn("Error al iniciar Firebase:", e);
     }
 
     const ADMIN_EMAIL = 'victorsoripar@gmail.com';
+
+    // GESTIONMERCENARIOS_FASE1B_TEST_UID
+    // NO cambiar firebaseConfig: TEST sigue leyendo el Firestore de producción.
+    const IS_TEST_GITHUB = window.location.hostname === 'theshori.github.io' && ['/shorimercs/','/shorimercs/index.html'].includes(window.location.pathname);
 
     // Formateador limpio de moneda para evitar decimales infinitos como 216.48999999999998
     const formatMoney = (val) => {
@@ -232,7 +253,8 @@
       return WORKER_COLOR_OPTIONS[0];
     };
 
-    // Cifrado de extremo a extremo para contraseñas de clientes
+    // AVISO: COMPATIBILIDAD CON DATOS ANTIGUOS. Base64 + clave en HTML NO es cifrado seguro.
+    // No modificar aún este formato: requiere migración de credenciales desde un servidor seguro.
     const getCountryInfoFromPhone = (phoneStr) => {
       if (!phoneStr) return { name: 'Desconocido', flag: '❓' };
       const clean = String(phoneStr).replace(/[^\d]/g, '');
@@ -255,15 +277,41 @@
       return { name: 'Internacional', flag: 'INT' };
     };
 
+    // PERMISOS_WEB_R1_V1: identidad y respuestas ligadas a la sesión actual.
+    function linkedActiveWorker(profiles, user) {
+      if (!user || !user.uid || !user.email) return null;
+      const email = user.email.toLowerCase();
+      if (!['jhonwick@merc.com','shori@merc.com','mandalorian@merc.com','nildead@merc.com'].includes(email)) return null;
+      const matches = profiles.filter(w => w.authUid === user.uid);
+      if (matches.length !== 1) return null;
+      const w = matches[0];
+      return typeof w.id === 'string' && w.id !== '' && w.id !== 'unassigned'
+        && typeof w.email === 'string' && w.email.toLowerCase() === email
+        && w.active !== false && w.disabled !== true ? w : null;
+    }
+    function listenForSession(subscribe, sessionVersion, source, onValue, onError) {
+      const version = sessionVersion.current;
+      let active = true;
+      const current = () => active && version === sessionVersion.current;
+      const unsubscribe = subscribe(source, value => {
+        if (current()) onValue(value);
+      }, error => {
+        if (current()) { active = false; onError(error); }
+      });
+      return () => { active = false; unsubscribe(); };
+    }
+
     function App() {
+      const sessionVersion = useRef(0);
+      const sessionSnapshot = (source, onValue, onError) => listenForSession(onSnapshot, sessionVersion, source, onValue, onError);
       const systemCurrentMonth = useMemo(() => getCurrentMonthYear(), []);
 
-      const [workers, setWorkers] = useState([]);
-      const [missions, setMissions] = useState([]);
-      const [tags, setTags] = useState([]);
-      const [templates, setTemplates] = useState([]);
-      const [notifications, setNotifications] = useState([]);
-      
+      const [realWorkers, setWorkers] = useState([]);
+      const [legacyMissions, setMissions] = useState([]);
+      const [_unusedTags, setTags] = useState([]);
+      const [_oldTemplates, setTemplates] = useState([]);
+      const [_oldNotifications, setNotifications] = useState([]);
+
       // Configuración de Automatización Fantasma (Make.com + Meta WhatsApp Cloud API)
       const [automationSettings, setAutomationSettings] = useState({
         makeWebhookUrl: '',
@@ -276,7 +324,7 @@
       });
       const [isBotModalOpen, setIsBotModalOpen] = useState(false);
 
-      const [authUser, setAuthUser] = useState(null); 
+      const [authUser, setAuthUser] = useState(null);
       const [isAuthChecking, setIsAuthChecking] = useState(true);
       const [emailInput, setEmailInput] = useState('');
       const [passwordInput, setPasswordInput] = useState('');
@@ -330,7 +378,9 @@
 
       const [toastMessage, setToastMessage] = useState(null);
       const [visibleCredentials, setVisibleCredentials] = useState({});
-      const [showAllCreatorPasswords, setShowAllCreatorPasswords] = useState(true);
+      // Privacidad visual: no mostrar todas las contraseñas por defecto.
+      // Esto NO sustituye el cifrado real, pendiente de la fase servidor.
+      const [showAllCreatorPasswords, setShowAllCreatorPasswords] = useState(false);
       const [isCompactView, setIsCompactView] = useState(false);
       const [clientFilterMode, setClientFilterMode] = useState('TOP');
       const [clientSearchQuery, setClientSearchQuery] = useState('');
@@ -346,81 +396,46 @@
         name: '', email: '', specialty: '', color: WORKER_COLOR_OPTIONS[0].id
       });
 
+      const r1 = useMissionR1(authUser, IS_TEST_GITHUB);
+      const missions = r1.missions;
+ const templates=r1.templates||[],notifications=r1.notifications||[];
+      const workers = r1.workers;
+      const tags = r1.tags.map(t => ({...t,color:t.color||'indigo'}));
+      const [r1CredentialMode, setR1CredentialMode] = useState('keep');
+      useEffect(() => {
+        if (!IS_TEST_GITHUB || !isMissionModalOpen) return;
+        setR1CredentialMode(editingMission ? 'keep' : 'replace');
+        setMissionForm(prev => editingMission ? { ...prev, accountUser: '', accountPass: '' } : {
+          ...prev, clientName: '', clientPhone: '', clientContact: '',
+          accountUser: '', accountPass: '', priceTotalEUR: '', workerPayUSD: ''
+        });
+      }, [isMissionModalOpen, editingMission?.id]);
+      useEffect(() => {
+        if (!IS_TEST_GITHUB || !r1.result || !['create','edit'].includes(r1.result.action)) return;
+        if (['committed','duplicate','no_change'].includes(r1.result.status)) {
+          setIsMissionModalOpen(false); setMissionForm(prev=>({...prev,accountUser:'',accountPass:''}));
+        }
+      }, [r1.result]);
+
       useEffect(() => {
         if (!auth) return;
         const unsubscribe = onAuthStateChanged(auth, (user) => {
+          sessionVersion.current += 1;
           setAuthUser(user);
+          setTags([]); setTemplates([]); setLiveBannerAlert(null);
+          setWorkers([]); setMissions([]); setNotifications([]);
+          // R1: no conservar formularios/credenciales de una sesión anterior.
+          if (IS_TEST_GITHUB) {
+            setIsMissionModalOpen(false); setEditingMission(null); setCompletingMission(null);
+            setMissionForm(prev => ({ ...prev, accountUser: '', accountPass: '' }));
+            setShowAllCreatorPasswords(false); setVisibleCredentials({});
+          }
           setIsAuthChecking(false);
           knownNotifIdsRef.current = new Set();
           initialNotifLoadDoneRef.current = false;
         });
         return () => unsubscribe();
       }, []);
-
-      useEffect(() => {
-        if (!db || !authUser) return;
-
-        const unsubWorkers = onSnapshot(collection(db, "workers"), (snapshot) => {
-          const cloudWorkers = [];
-          snapshot.forEach((docSnap) => cloudWorkers.push({ id: docSnap.id, ...docSnap.data() }));
-          setWorkers(cloudWorkers);
-        });
-
-        const unsubTags = onSnapshot(collection(db, "tags"), (snapshot) => {
-          const cloudTags = [];
-          snapshot.forEach((docSnap) => cloudTags.push({ id: docSnap.id, ...docSnap.data() }));
-          setTags(cloudTags);
-        });
-
-        const unsubTemplates = onSnapshot(collection(db, "mission_templates"), (snapshot) => {
-          const cloudTemplates = [];
-          snapshot.forEach((docSnap) => cloudTemplates.push({ id: docSnap.id, ...docSnap.data() }));
-          setTemplates(cloudTemplates);
-        });
-
-        const unsubNotifications = onSnapshot(collection(db, "notifications"), (snapshot) => {
-          const cloudNotifs = [];
-          snapshot.forEach((docSnap) => cloudNotifs.push({ id: docSnap.id, ...docSnap.data() }));
-          setNotifications(cloudNotifs);
-        });
-
-        const unsubSettings = onSnapshot(doc(db, "settings", "whatsapp_automation"), (docSnap) => {
-          if (docSnap.exists()) {
-            setAutomationSettings(prev => ({ ...prev, ...docSnap.data() }));
-          }
-        });
-
-        return () => {
-          unsubWorkers();
-          unsubTags();
-          unsubTemplates();
-          unsubNotifications();
-          unsubSettings();
-        };
-      }, [authUser]);
-
-      useEffect(() => {
-        if (!db || !authUser) return;
-        const isAdmin = authUser.email?.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim();
-        const myWorker = workers.find(w => (w.email || '').toLowerCase().trim() === (authUser.email || '').toLowerCase().trim());
-
-        if (!isAdmin && !myWorker) {
-          setMissions([]);
-          return;
-        }
-
-        const missionsQuery = isAdmin
-          ? collection(db, "missions")
-          : query(collection(db, "missions"), where("workerId", "==", myWorker.id));
-
-        const unsubMissions = onSnapshot(missionsQuery, (snapshot) => {
-          const cloudMissions = [];
-          snapshot.forEach((docSnap) => cloudMissions.push({ id: docSnap.id, ...docSnap.data() }));
-          setMissions(cloudMissions);
-        });
-
-        return () => unsubMissions();
-      }, [authUser, workers]);
 
       const showToast = (msg) => {
         setToastMessage({ text: msg });
@@ -438,6 +453,11 @@
         progressText = '',
         notes = ''
       }) => {
+        if (IS_TEST_GITHUB) {
+          console.info('TEST: envío WhatsApp omitido para evitar avisos a clientes reales.');
+          showToast('🧪 TEST: WhatsApp bloqueado; los cambios en Firestore siguen siendo REALES.');
+          return;
+        }
         if (!mission || !automationSettings.enabled) return;
 
         const rawPhone = mission.clientPhone || mission.clientContact || '';
@@ -470,6 +490,7 @@
 
         const payload = {
           id: queueId,
+          missionId: mission.id,
           timestamp: now,
           isoDate: new Date(now).toISOString(),
           eventType,
@@ -506,60 +527,22 @@
         }
       };
 
+      useEffect(() => {if(r1.connected&&r1.automationSettings)setAutomationSettings({...r1.automationSettings,makeWebhookUrl:''});}, [r1.automationSettings]);
+
       const handleSaveBotSettings = async (e) => {
         e.preventDefault();
-        if (db) {
-          try {
-            await setDoc(doc(db, "settings", "whatsapp_automation"), automationSettings, { merge: true });
-            showToast('🤖 Configuración del Bot de WhatsApp guardada');
-            setIsBotModalOpen(false);
-          } catch (err) {
-            console.error(err);
-          }
-        }
+        try { const data=Object.fromEntries(['enabled','notifyOnStart','notifyOnPause','notifyOnResume','notifyOnChecklist','notifyOnComplete'].map(k=>[k,automationSettings[k]===true]));await r1.extra('automationSave',data);showToast('Configuración de avisos guardada');setIsBotModalOpen(false); } catch(err) {showToast(err.message);}
       };
 
-      const handleTestMakeWebhook = async () => {
-        if (!automationSettings.makeWebhookUrl || !automationSettings.makeWebhookUrl.startsWith('http')) {
-          showToast('⚠️ Pega primero la URL del Webhook de Make.com');
-          return;
-        }
-        const testPayload = {
-          id: `wa-test-${Date.now()}`,
-          timestamp: Date.now(),
-          isoDate: new Date().toISOString(),
-          eventType: 'mission_paused',
-          metaTemplateName: 'mision_pausada',
-          toPhoneMeta: '34600000000',
-          toPhoneE164: '+34600000000',
-          clientName: 'Cliente de Prueba',
-          missionTitle: '3 Caminos Necrópolis',
-          stepDetail: 'Camino 1',
-          progressText: '1/3 (33%)',
-          notes: 'Prueba de conexión',
-          fullMessageText: '¡Hola Cliente de Prueba! ⏸️ Hemos puesto en pausa temporalmente tu misión "3 Caminos Necrópolis". Tienes tu cuenta 100% libre para entrar a jugar.',
-          templateParam1: 'Cliente de Prueba',
-          templateParam2: '3 Caminos Necrópolis',
-          templateParam3: '1/3 (33%)'
-        };
-        try {
-          await fetch(automationSettings.makeWebhookUrl.trim(), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(testPayload)
-          });
-          showToast('✅ Datos de prueba enviados a Make.com');
-        } catch (err) {
-          showToast('⚠️ Error al conectar con el Webhook de Make');
-        }
-      };
+      const handleTestMakeWebhook = () => showToast('Los avisos se gestionan desde el NAS.');
 
       const isCreatorSession = authUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-      const currentIsolatedWorker = workers.find(w => w.email?.toLowerCase() === authUser?.email?.toLowerCase()) || null;
+      const currentIsolatedWorker = linkedActiveWorker(workers, authUser);
       const isolatedWorkerId = currentIsolatedWorker ? currentIsolatedWorker.id : null;
 
       const currentRecipientKey = isCreatorSession ? 'creator' : (isolatedWorkerId || null);
 
+      // Notifications from production are deliberately not subscribed by this rehearsal page.
       const myNotifications = useMemo(() => {
         if (!currentRecipientKey) return [];
         return notifications
@@ -607,7 +590,8 @@
         }
       }, [myNotifications, currentRecipientKey, soundEnabled, notifications.length]);
 
-      const pushCloudNotification = async ({ recipient, title, message, eventType = 'info', missionTitle = '', clientName = '' }) => {
+      const pushCloudNotification = async ({ recipient, title, message, eventType = 'info', missionTitle = '', clientName = '', missionId = null }) => {
+        if (IS_TEST_GITHUB) { showToast('🧪 TEST: las notificaciones comerciales no se escriben desde esta integración.'); return; }
         if (!db || !recipient) return;
         const now = Date.now();
         const notifId = `notif-${now}-${Math.random().toString(36).slice(2, 7)}`;
@@ -619,6 +603,8 @@
           eventType,
           missionTitle,
           clientName,
+          actorWorkerId: !isCreatorSession ? isolatedWorkerId : null,
+          missionId,
           read: false,
           createdAt: now
         };
@@ -629,33 +615,11 @@
         }
       };
 
-      const handleMarkNotifAsRead = async (notif) => {
-        if (!db || notif.read) return;
-        try {
-          await setDoc(doc(db, "notifications", notif.id), { read: true }, { merge: true });
-        } catch (e) { console.error(e); }
-      };
+      const handleMarkNotifAsRead = async notif => {if(!notif.read)await r1.extra('notificationRead',{id:notif.id,source:notif.source}).catch(e=>showToast(e.message));};
 
-      const handleMarkAllNotifsAsRead = async () => {
-        if (!db) return;
-        const unread = myNotifications.filter(n => !n.read);
-        for (const n of unread) {
-          try {
-            await setDoc(doc(db, "notifications", n.id), { read: true }, { merge: true });
-          } catch (e) {}
-        }
-        showToast('✓ Todas las notificaciones marcadas como leídas');
-      };
+      const handleMarkAllNotifsAsRead = async()=>{for(const n of myNotifications.filter(n=>!n.read))await r1.extra('notificationRead',{id:n.id,source:n.source}).catch(e=>showToast(e.message));};
 
-      const handleClearAllMyNotifications = async () => {
-        if (!db) return;
-        for (const n of myNotifications) {
-          try {
-            await deleteDoc(doc(db, "notifications", n.id));
-          } catch (e) {}
-        }
-        showToast('🗑️ Historial de notificaciones vaciado');
-      };
+      const handleClearAllMyNotifications = async()=>{for(const n of myNotifications)await r1.extra('notificationDelete',{id:n.id,source:n.source}).catch(e=>showToast(e.message));};
 
       const requestBrowserNotificationPermission = async () => {
         if (typeof Notification === 'undefined') {
@@ -977,7 +941,7 @@
           const count = matchingMissions.length;
           const revenueEUR = matchingMissions.reduce((acc, m) => acc + (Number(m.priceTotalEUR) || 0), 0);
           const workerCostUSD = matchingMissions.reduce((acc, m) => acc + (Number(m.originalWorkerPayUSD !== undefined ? m.originalWorkerPayUSD : m.workerPayUSD) || 0), 0);
-          
+
           const workerCostEUR = workerCostUSD * 0.92;
           const netProfitEUR = revenueEUR - workerCostEUR;
           const percentage = totalMissionsInPeriod > 0 ? Math.round((count / totalMissionsInPeriod) * 100) : 0;
@@ -1005,7 +969,7 @@
               clientPhone: phoneVal,
               clientContact: phoneVal,
               accountUser: m.accountUser || '',
-              accountPass: decryptPassword(m.accountPass) || '',
+              accountPass: IS_TEST_GITHUB ? '' : (decryptPassword(m.accountPass) || ''),
               loginMethod: m.loginMethod || 'Kabam ID',
               paymentMethod: getMissionPaymentMethod(m),
               workerId: m.workerId || 'unassigned',
@@ -1019,7 +983,7 @@
             if (!existing.clientPhone && phoneVal) existing.clientPhone = phoneVal;
             if (!existing.clientContact && phoneVal) existing.clientContact = phoneVal;
             if (!existing.accountUser && m.accountUser) existing.accountUser = m.accountUser;
-            if (!existing.accountPass && m.accountPass) existing.accountPass = decryptPassword(m.accountPass);
+            if (!IS_TEST_GITHUB && !existing.accountPass && m.accountPass) existing.accountPass = decryptPassword(m.accountPass);
             if (!existing.loginMethod && m.loginMethod) existing.loginMethod = m.loginMethod;
           }
         });
@@ -1049,7 +1013,7 @@
           clientContact: savedPhone || prev.clientContact,
           loginMethod: clientData.loginMethod || prev.loginMethod || 'Kabam ID',
           accountUser: clientData.accountUser || prev.accountUser,
-          accountPass: clientData.accountPass || prev.accountPass,
+          accountPass: IS_TEST_GITHUB ? prev.accountPass : (clientData.accountPass || prev.accountPass),
           paymentMethod: clientData.paymentMethod || prev.paymentMethod || 'Bizum'
         }));
         setShowClientSuggestions(false);
@@ -1149,7 +1113,7 @@
               clientPhone: phoneVal,
               clientContact: phoneVal,
               accountUser: m.accountUser || '',
-              accountPass: decryptPassword(m.accountPass) || '',
+              accountPass: IS_TEST_GITHUB ? '' : (decryptPassword(m.accountPass) || ''),
               loginMethod: m.loginMethod || 'Kabam ID',
               paymentMethod: getMissionPaymentMethod(m),
               count: 0,
@@ -1165,7 +1129,7 @@
           item.revenueEUR += rev;
           item.workerCostUSD += costUSD;
           if (!item.accountUser && m.accountUser) item.accountUser = m.accountUser;
-          if (!item.accountPass && m.accountPass) item.accountPass = decryptPassword(m.accountPass);
+          if (!IS_TEST_GITHUB && !item.accountPass && m.accountPass) item.accountPass = decryptPassword(m.accountPass);
           if (!item.clientPhone && phoneVal) item.clientPhone = phoneVal;
           if (!item.clientContact && phoneVal) item.clientContact = phoneVal;
         });
@@ -1241,37 +1205,7 @@
         }
       };
 
-      const handleSaveAsTemplate = async () => {
-        if (!missionForm.missionTitle.trim()) {
-          showToast('⚠️ Pon un título a la misión para guardarla como plantilla');
-          return;
-        }
-        const templateId = `tpl-${Date.now()}`;
-        const templateData = {
-          id: templateId,
-          name: missionForm.missionTitle.trim(),
-          missionTitle: missionForm.missionTitle,
-          gameCategory: missionForm.gameCategory,
-          loginMethod: missionForm.loginMethod,
-          instructions: missionForm.instructions,
-          priceTotalEUR: Number(missionForm.priceTotalEUR) || 0,
-          workerPayUSD: Number(missionForm.workerPayUSD) || 0,
-          paymentMethod: missionForm.paymentMethod,
-          tags: missionForm.tags || [],
-          checklist: missionForm.checklist || [],
-          createdAt: Date.now()
-        };
-
-        if (db) {
-          try {
-            await setDoc(doc(db, "mission_templates", templateId), templateData);
-            showToast(`⭐ Plantilla "${templateData.name}" guardada con éxito`);
-          } catch (err) {
-            console.error(err);
-            showToast('⚠️ Error al guardar la plantilla');
-          }
-        }
-      };
+      const handleSaveAsTemplate = async()=>{try{const fields=['missionTitle','gameCategory','loginMethod','instructions','priceTotalEUR','workerPayUSD','paymentMethod','tags','checklist'];const t=Object.fromEntries(fields.map(k=>[k,missionForm[k]]));t.name=t.missionTitle;t.priceTotalEUR=Number(t.priceTotalEUR)||0;t.workerPayUSD=Number(t.workerPayUSD)||0;await r1.extra('templateSave',{id:'tpl-'+crypto.randomUUID(),template:t},0);showToast('Plantilla guardada');}catch(e){showToast(e.message);}};
 
       const handleSelectTemplate = (e) => {
         const tId = e.target.value;
@@ -1296,57 +1230,14 @@
         showToast(`✨ Plantilla "${selectedTpl.name}" cargada correctamente`);
       };
 
-      const handleDeleteTemplate = async (tplId) => {
-        if (!db) return;
-        try {
-          await deleteDoc(doc(db, "mission_templates", tplId));
-          if (editingTemplate && editingTemplate.id === tplId) {
-            setEditingTemplate(null);
-            setTemplateForm({ name: '', missionTitle: '', gameCategory: 'Exploración de Actos', loginMethod: 'Kabam ID', instructions: '', priceTotalEUR: '90', workerPayUSD: '60', paymentMethod: 'Bizum', tags: [], checklist: [] });
-          }
-          showToast('🗑️ Plantilla eliminada');
-        } catch (e) {
-          console.error(e);
-          showToast('⚠️ Error al eliminar la plantilla');
-        }
-      };
+      const handleDeleteTemplate = async id=>{const t=templates.find(x=>x.id===id);try{await r1.extra('templateDelete',{id},t.revision);setEditingTemplate(null);}catch(e){showToast(e.message);}};
 
       const toggleTagInTemplateForm = (tagId) => setTemplateForm(prev => {
         const current = Array.isArray(prev.tags) ? prev.tags : [];
         return current.includes(tagId) ? { ...prev, tags: current.filter(id => id !== tagId) } : { ...prev, tags: [...current, tagId] };
       });
 
-      const handleSaveManualTemplate = async (e) => {
-        e.preventDefault();
-        const cleanName = (templateForm.name || templateForm.missionTitle || '').trim();
-        if (!cleanName) { showToast('⚠️ Escribe un nombre o título para la plantilla'); return; }
-        const tplId = editingTemplate ? editingTemplate.id : `tpl-${Date.now()}`;
-        const payload = {
-          id: tplId,
-          name: cleanName,
-          missionTitle: templateForm.missionTitle || cleanName,
-          gameCategory: templateForm.gameCategory || 'Exploración de Actos',
-          loginMethod: templateForm.loginMethod || 'Kabam ID',
-          instructions: templateForm.instructions || '',
-          priceTotalEUR: Number(templateForm.priceTotalEUR) || 0,
-          workerPayUSD: Number(templateForm.workerPayUSD) || 0,
-          paymentMethod: templateForm.paymentMethod || 'Bizum',
-          tags: templateForm.tags || [],
-          checklist: templateForm.checklist || [],
-          createdAt: editingTemplate ? editingTemplate.createdAt : Date.now()
-        };
-        if (db) {
-          try {
-            await setDoc(doc(db, "mission_templates", tplId), payload);
-            showToast(`⭐ Plantilla "${payload.name}" guardada con éxito`);
-            setEditingTemplate(null);
-            setTemplateForm({ name: '', missionTitle: '', gameCategory: 'Exploración de Actos', loginMethod: 'Kabam ID', instructions: '', priceTotalEUR: '90', workerPayUSD: '60', paymentMethod: 'Bizum', tags: [], checklist: [] });
-          } catch (err) {
-            console.error(err);
-            showToast('⚠️ Error al guardar la plantilla');
-          }
-        }
-      };
+      const handleSaveManualTemplate = async e=>{e.preventDefault();try{const t={...templateForm,priceTotalEUR:Number(templateForm.priceTotalEUR)||0,workerPayUSD:Number(templateForm.workerPayUSD)||0};await r1.extra('templateSave',{id:editingTemplate?.id||'tpl-'+crypto.randomUUID(),template:t},editingTemplate?.revision||0);setEditingTemplate(null);showToast('Plantilla guardada');}catch(err){showToast(err.message);}};
 
       const handleAddCheckToTemplateForm = () => {
         const clean = newTplCheckItem.trim();
@@ -1357,6 +1248,13 @@
       };
 
       const handleSaveTag = async (e) => {
+        if (IS_TEST_GITHUB) {
+          e.preventDefault();
+          if (editingTag) { try{await r1.batch('tagUpdate',editingTag.id,{name:tagForm.name.trim(),color:tagForm.color});setEditingTag(null);showToast('Etiqueta actualizada');}catch(e){showToast(e.message);}return;}
+          try { await r1.mutate('tagCreate', null, {name:tagForm.name.trim(),color:tagForm.color}); setTagForm({name:'',color:'indigo'}); showToast('Etiqueta creada.'); }
+          catch (e) { showToast(e.message); }
+          return;
+        }
         e.preventDefault();
         const cleanName = tagForm.name.trim();
         if (!cleanName) { showToast('⚠️ Escribe un nombre para la etiqueta'); return; }
@@ -1374,6 +1272,11 @@
       };
 
       const handleQuickCreateTagInModal = async () => {
+        if (IS_TEST_GITHUB) {
+          try { const result = await r1.mutate('tagCreate', null, {name:quickTagName.trim(),color:quickTagColor}); setMissionForm(prev=>({...prev,tags:[...(prev.tags||[]),'tag-'+result.requestId]})); setQuickTagName(''); }
+          catch (e) { showToast(e.message); }
+          return;
+        }
         const cleanName = quickTagName.trim();
         if (!cleanName) return;
         const newId = `tag-${Date.now()}`;
@@ -1384,6 +1287,12 @@
       };
 
       const handleDeleteTag = async () => {
+        if (IS_TEST_GITHUB) {
+          if (!tagToDelete) return;
+          try { await r1.batch('tagDelete', tagToDelete.id); setTagToDelete(null); setTagFilter('ALL'); showToast('Etiqueta retirada de las misiones.'); }
+          catch (e) { showToast(e.message); }
+          return;
+        }
         if (!tagToDelete) return;
         if (db) {
           await deleteDoc(doc(db, "tags", tagToDelete.id));
@@ -1432,6 +1341,12 @@
       };
 
       const handleToggleMissionChecklistItem = async (mission, itemId) => {
+        if (IS_TEST_GITHUB) {
+          if (!r1.isManaged(mission)) { showToast('Actualiza para cargar la misión desde el servicio.'); return; }
+          try { await r1.mutate('checklist', mission, { itemId, done: !getMissionChecklist(mission).find(item => item.id === itemId)?.done });  showToast('✅ Operación confirmada. Consulta el resultado en el panel R1.'); }
+          catch (_) { showToast('⚠️ Revisa el resultado de R1 antes de repetir.'); }
+          return;
+        }
         if (!db) return;
         const currentList = getMissionChecklist(mission);
         let toggledItem = null;
@@ -1454,6 +1369,7 @@
               const workerName = currentIsolatedWorker?.name || 'Mercenario';
               await pushCloudNotification({
                 recipient: 'creator',
+                missionId: mission.id,
                 title: `☑️ Avance de ${workerName} (${doneCount}/${updatedList.length})`,
                 message: `${workerName} completó el paso "${toggledItem.text}" en "${mission.missionTitle}" (Cliente: ${mission.clientName}).`,
                 eventType: 'started',
@@ -1477,6 +1393,11 @@
       };
 
       const handleLiquidateWorker = async (workerId) => {
+        if (IS_TEST_GITHUB) {
+          try { const result = await r1.batch('settle', workerId); showToast('✅ Liquidación confirmada: ' + (result.settlement.amountCentsUSD / 100).toFixed(2) + ' USD'); }
+          catch (e) { showToast(e.message); }
+          return;
+        }
         const worker = workers.find(w => w.id === workerId);
         if (!worker) return;
 
@@ -1517,6 +1438,17 @@
             done: false
           });
           setNewChecklistItemText('');
+        }
+
+        if (IS_TEST_GITHUB) {
+          if (editingMission && !r1.isManaged(editingMission)) { showToast('Actualiza para cargar la misión desde el servicio.'); return; }
+          try {
+            await r1.save(editingMission, missionForm, finalChecklist, r1CredentialMode);
+            setMissionForm(prev=>({...prev,accountUser:'',accountPass:''}));
+            setIsMissionModalOpen(false);
+            showToast('✅ Misión TEST guardada por Node.js. Consulta el panel R1.');
+          } catch (error) { showToast(error.message || '⚠️ No se confirma el guardado. Revisa el aviso R1 superior.'); }
+          return;
         }
 
         const rawPhoneInput = (missionForm.clientPhone || missionForm.clientContact || '').trim();
@@ -1618,6 +1550,12 @@
       };
 
       const handleQuickWorkerReassign = async (mission, newWorkerId) => {
+        if (IS_TEST_GITHUB) {
+          if (!r1.isManaged(mission)) { showToast('Actualiza para cargar la misión desde el servicio.'); return; }
+          try { await r1.mutate('reassign', mission, { workerId: newWorkerId });  showToast('✅ Operación confirmada. Consulta el resultado en el panel R1.'); }
+          catch (_) { showToast('⚠️ Revisa el resultado de R1 antes de repetir.'); }
+          return;
+        }
         if (!db) return;
         const oldWorkerId = mission.workerId || 'unassigned';
         if (oldWorkerId === newWorkerId) return;
@@ -1661,6 +1599,12 @@
       };
 
       const handleCreatorQuickStatusChange = async (mission, newStatus) => {
+        if (IS_TEST_GITHUB) {
+          if (!r1.isManaged(mission)) { showToast('Actualiza para cargar la misión desde el servicio.'); return; }
+          try { await r1.mutate('status', mission, { status: newStatus, completionNotes: '' });  showToast('✅ Operación confirmada. Consulta el resultado en el panel R1.'); }
+          catch (_) { showToast('⚠️ Revisa el resultado de R1 antes de repetir.'); }
+          return;
+        }
         if (!db || mission.status === newStatus) return;
         const now = Date.now();
         let accumulated = Number(mission.accumulatedWorkMs) || 0;
@@ -1711,6 +1655,12 @@
       };
 
       const handleQuickTogglePaymentMethod = async (mission) => {
+        if (IS_TEST_GITHUB) {
+          if (!r1.isManaged(mission)) { showToast('Actualiza para cargar la misión desde el servicio.'); return; }
+          try { await r1.mutate('payment', mission, { paymentMethod: getMissionPaymentMethod(mission) === 'PayPal' ? 'Bizum' : 'PayPal' });  showToast('✅ Operación confirmada. Consulta el resultado en el panel R1.'); }
+          catch (_) { showToast('⚠️ Revisa el resultado de R1 antes de repetir.'); }
+          return;
+        }
         if (!db) return;
         const currentMethod = getMissionPaymentMethod(mission);
         const nextMethod = currentMethod === 'Bizum' ? 'PayPal' : 'Bizum';
@@ -1723,6 +1673,12 @@
       };
 
       const handleStartMission = async (mission) => {
+        if (IS_TEST_GITHUB) {
+          if (!r1.isManaged(mission)) { showToast('Actualiza para cargar la misión desde el servicio.'); return; }
+          try { await r1.mutate('status', mission, { status: 'En Progreso' });  showToast('✅ Operación confirmada. Consulta el resultado en el panel R1.'); }
+          catch (_) { showToast('⚠️ Revisa el resultado de R1 antes de repetir.'); }
+          return;
+        }
         const now = Date.now();
         const isResuming = mission.status === 'En Pausa';
         if (db) {
@@ -1735,6 +1691,7 @@
           const workerName = currentIsolatedWorker?.name || 'Un mercenario';
           await pushCloudNotification({
             recipient: 'creator',
+            missionId: mission.id,
             title: isResuming ? `▶️ ${workerName} reanudó la misión` : `⚡ ${workerName} empezó una misión`,
             message: isResuming
               ? `${workerName} ha vuelto a entrar a la cuenta de ${mission.clientName} para continuar "${mission.missionTitle}".`
@@ -1754,6 +1711,12 @@
       };
 
       const handlePauseMission = async (mission) => {
+        if (IS_TEST_GITHUB) {
+          if (!r1.isManaged(mission)) { showToast('Actualiza para cargar la misión desde el servicio.'); return; }
+          try { await r1.mutate('status', mission, { status: 'En Pausa' });  showToast('✅ Operación confirmada. Consulta el resultado en el panel R1.'); }
+          catch (_) { showToast('⚠️ Revisa el resultado de R1 antes de repetir.'); }
+          return;
+        }
         const now = Date.now();
         const startRef = Number(mission.lastResumedAt || mission.startedAt || now);
         const sessionElapsed = Math.max(0, now - startRef);
@@ -1770,6 +1733,7 @@
           const workerName = currentIsolatedWorker?.name || 'Un mercenario';
           await pushCloudNotification({
             recipient: 'creator',
+            missionId: mission.id,
             title: `⏸️ Misión Pausada (${mission.clientName} puede entrar)`,
             message: `${workerName} ha pausado "${mission.missionTitle}". Cuenta libre para el cliente ${mission.clientName}. (Tiempo trabajado: ${formatDuration(newAccumulated)}).`,
             eventType: 'status_changed',
@@ -1787,6 +1751,12 @@
       };
 
       const handlePrioritizeMission = async (mission) => {
+        if (IS_TEST_GITHUB) {
+          if (!r1.isManaged(mission)) { showToast('Actualiza para cargar la misión desde el servicio.'); return; }
+          try { await r1.mutate('priority', mission, {});  showToast('✅ Operación confirmada. Consulta el resultado en el panel R1.'); }
+          catch (_) { showToast('⚠️ Revisa el resultado de R1 antes de repetir.'); }
+          return;
+        }
         if (!activeWorkerQueue || activeWorkerQueue.length === 0) return;
         const minPrio = Math.min(...activeWorkerQueue.map(m => m.workerPriorityOrder !== undefined ? Number(m.workerPriorityOrder) : 0));
         if (db) { await setDoc(doc(db, "missions", mission.id), { workerPriorityOrder: minPrio - 1 }, { merge: true }); }
@@ -1794,6 +1764,13 @@
       };
 
       const handleConfirmCompleteMission = async (e) => {
+        if (IS_TEST_GITHUB) {
+          e.preventDefault();
+          if (!r1.isManaged(completingMission)) { showToast('Actualiza para cargar la misión desde el servicio.'); return; }
+          try { await r1.mutate('status', completingMission, { status: 'Completada', completionNotes: completionNoteInput.trim() }); setCompletingMission(null); setCompletionNoteInput(''); showToast('✅ Misión completada y credencial retirada. Consulta el resultado en el panel R1.'); }
+          catch (_) { showToast('⚠️ Revisa el resultado de R1 antes de repetir.'); }
+          return;
+        }
         e.preventDefault();
         if (!completingMission) return;
         const now = Date.now();
@@ -1823,6 +1800,7 @@
           const workerName = currentIsolatedWorker?.name || 'Un mercenario';
           await pushCloudNotification({
             recipient: 'creator',
+            missionId: completingMission.id,
             title: `✅ ¡${workerName} completó una misión!`,
             message: `${workerName} ha finalizado "${completingMission.missionTitle}" (Cliente: ${completingMission.clientName} • Contraseña destruida por seguridad).`,
             eventType: 'completed',
@@ -1843,6 +1821,12 @@
       };
 
       const handleDeleteMission = async () => {
+        if (IS_TEST_GITHUB) {
+          if (!r1.isManaged(missionToDelete)) { showToast('Actualiza para cargar la misión desde el servicio.'); return; }
+          try { await r1.mutate('delete', missionToDelete, {}); setMissionToDelete(null); showToast('✅ Operación confirmada. Consulta el resultado en el panel R1.'); }
+          catch (_) { showToast('⚠️ Revisa el resultado de R1 antes de repetir.'); }
+          return;
+        }
         if (!missionToDelete) return;
         if (db) {
           const prevWorkerId = missionToDelete.workerId;
@@ -1865,9 +1849,17 @@
       };
 
       const handleSaveWorker = async (e) => {
+        if (IS_TEST_GITHUB) {
+          e.preventDefault();
+          if (!editingWorker) { showToast('Esta versión administra los perfiles ya vinculados a Firebase.'); return; }
+          if(workerForm.email!==editingWorker.email){showToast('El correo vinculado se conserva.');return;}
+          try { await r1.batch('workerUpdate',editingWorker.id,{name:workerForm.name.trim(),active:editingWorker.active!==false,color:workerForm.color,specialty:workerForm.specialty.trim()});setIsWorkerModalOpen(false);showToast('Perfil actualizado'); }
+          catch (e) { showToast(e.message); }
+          return;
+        }
         e.preventDefault();
         if (!workerForm.name.trim() || !workerForm.email.trim()) { showToast('⚠️ Introduce nombre y Correo Firebase'); return; }
-        
+
         const cleanEmail = workerForm.email.trim().toLowerCase();
 
         if (editingWorker) {
@@ -1883,6 +1875,7 @@
       };
 
       const handleQuickWorkerColorChange = async (worker, newColorId) => {
+        if(IS_TEST_GITHUB){try{await r1.batch('workerUpdate',worker.id,{name:worker.name,active:worker.active!==false,color:newColorId,specialty:worker.specialty||''});showToast('Color actualizado');}catch(e){showToast(e.message);}return;}
         if (!db) return;
         try {
           await setDoc(doc(db, "workers", worker.id), { ...worker, color: newColorId }, { merge: true });
@@ -1894,6 +1887,12 @@
       };
 
       const handleDeleteWorker = async () => {
+        if (IS_TEST_GITHUB) {
+          if (!workerToDelete) return;
+          try { await r1.batch('workerDelete', workerToDelete.id); setWorkerToDelete(null); showToast('Perfil archivado; historial de pagos conservado.'); }
+          catch (e) { showToast(e.message); }
+          return;
+        }
         if (!workerToDelete) return;
         if (db) {
           await deleteDoc(doc(db, "workers", workerToDelete.id));
@@ -2173,6 +2172,7 @@
 
             {renderMissionChecklistBlock(m)}
 
+            {IS_TEST_GITHUB ? <R1CredentialCard r1={r1} mission={m} /> : (
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span>Credenciales ({m.loginMethod || 'Kabam ID'})</span>
@@ -2189,6 +2189,7 @@
                 <button onClick={() => copyToClipboard(decryptPassword(m.accountPass), 'Contraseña')} className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold shrink-0 ml-2">Copiar</button>
               </div>
             </div>
+            )}
 
             {m.instructions && (
               <div className="bg-indigo-950/40 p-3 rounded-xl border border-indigo-500/30 text-xs text-slate-200">
@@ -2276,13 +2277,14 @@
         );
       }
 
+      if (!r1.connected) return <div className="min-h-screen bg-slate-950 text-slate-100"><R1IntegrationBar r1={r1} /><button onClick={handleLogout}>Cerrar sesión</button></div>;
       if (!isCreatorSession && !currentIsolatedWorker) {
         return (
           <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl text-center space-y-4 max-w-sm">
               <Lock className="w-10 h-10 text-rose-500 mx-auto" />
               <h2 className="text-white font-bold">Cuenta no asignada</h2>
-              <p className="text-xs text-slate-400">Has iniciado sesión correctamente, pero el administrador aún no ha vinculado tu correo a un perfil de mercenario.</p>
+              <p className="text-xs text-slate-400">No se ha podido confirmar un perfil activo y único vinculado a esta cuenta. Si persiste, contacta con el administrador.</p>
               <button onClick={handleLogout} className="px-4 py-2 bg-slate-800 rounded-xl text-xs font-bold">Cerrar sesión</button>
             </div>
           </div>
@@ -2327,6 +2329,7 @@
             </div>
           )}
 
+          {IS_TEST_GITHUB && <R1IntegrationBar r1={r1} />}
           <main className="max-w-7xl mx-auto px-4 pt-6">
             {!isCreatorSession ? (
               <div className="max-w-lg mx-auto space-y-4">
@@ -2473,15 +2476,15 @@
                       type="button"
                       onClick={() => setIsBotModalOpen(true)}
                       className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border flex items-center gap-1.5 transition ${
-                        automationSettings.makeWebhookUrl && automationSettings.enabled
+                        r1.dispatchEnabled && automationSettings.enabled
                           ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
                           : 'bg-slate-800 border-slate-700 text-cyan-300 hover:bg-slate-700'
                       }`}
-                      title="Configurar Automatización Fantasma de WhatsApp (Make + Meta API)"
+                      title="Configurar avisos de WhatsApp"
                     >
                       <Bot className="w-4 h-4" />
                       🤖 Bot WhatsApp
-                      {automationSettings.makeWebhookUrl && automationSettings.enabled && (
+                      {r1.dispatchEnabled && automationSettings.enabled && (
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                       )}
                     </button>
@@ -2511,6 +2514,7 @@
                   <button onClick={() => setCreatorTab('ranking')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${creatorTab === 'ranking' ? 'bg-amber-500 text-slate-950 font-extrabold' : 'text-slate-400 hover:text-slate-200'}`}>🏆 Top Ventas y Clientes</button>
                   <button onClick={() => setCreatorTab('tags')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${creatorTab === 'tags' ? 'bg-amber-500 text-slate-950 font-extrabold' : 'text-slate-400 hover:text-slate-200'}`}>🏷️ Etiquetas ({tags.length})</button>
                   <button onClick={() => setCreatorTab('finances')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${creatorTab === 'finances' ? 'bg-emerald-600 text-slate-950 font-extrabold' : 'text-slate-400 hover:text-slate-200'}`}>💶 Finanzas Mensuales</button>
+                  {IS_TEST_GITHUB && <button onClick={() => setCreatorTab('whatsappCenter')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${creatorTab === 'whatsappCenter' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>📨 Centro WhatsApp</button>}
                   <button onClick={() => setCreatorTab('workers')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition whitespace-nowrap flex items-center justify-center gap-1.5 ${creatorTab === 'workers' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
                     <span>👥 Gestión de Mercs</span>
                     {totalPendingAllWorkersUSD > 0 && (
@@ -2521,7 +2525,11 @@
                   </button>
                 </div>
 
-                {creatorTab === 'ranking' ? (
+                {creatorTab === 'whatsappCenter' && IS_TEST_GITHUB ? (
+
+                  <p className="text-sm text-amber-200">Consulta «Últimos avisos» en el panel superior. Actualiza para ver su estado; aceptado no confirma la entrega al destinatario.</p>
+
+                ) : creatorTab === 'ranking' ? (
                   <div className="space-y-6">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-2xl p-4">
                       <div>
@@ -2561,7 +2569,7 @@
                                       <span className="text-xs font-extrabold text-white">{stat.count} veces</span>
                                       <span className="text-[11px] text-slate-400">({stat.percentage}% del total)</span>
                                     </div>
-                                    
+
                                     <div className="flex items-center gap-2 text-xs flex-wrap">
                                       <span className="font-extrabold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Ingreso: €{formatMoney(stat.revenueEUR)}</span>
                                       <span className="font-bold text-rose-400 bg-rose-500/10 px-2 py-1 rounded border border-rose-500/20">Mercs: ${formatMoney(stat.workerCostUSD)}</span>
@@ -2722,7 +2730,7 @@
                                                 missionTitle: '',
                                                 gameCategory: 'Exploración de Actos',
                                                 accountUser: client.accountUser || '',
-                                                accountPass: client.accountPass || '',
+                                                accountPass: IS_TEST_GITHUB ? '' : (client.accountPass || ''),
                                                 loginMethod: client.loginMethod || 'Kabam ID',
                                                 instructions: '',
                                                 priority: 'Normal',
@@ -3559,7 +3567,7 @@
                             <CreditCard className="w-5 h-5 text-emerald-400" /> 💳 Liquidación y Pagos a Mercenarios
                           </h3>
                           <p className="text-xs text-slate-400 mt-0.5">
-                            Al pulsar <strong className="text-emerald-400">"Pagar y Liquidar"</strong>, se guarda el pago en el historial del mercenario, se le envía una notificación y su saldo pendiente vuelve a $0 USD.
+                            Al pulsar <strong className="text-emerald-400">"Registrar liquidación"</strong>, se registra la liquidación real del mercenario y su saldo pendiente vuelve a $0 USD. Debes realizar el pago por tu cuenta; este botón no transfiere dinero.
                           </p>
                         </div>
                         <div className="bg-slate-950 border border-emerald-500/40 px-4 py-2.5 rounded-xl flex items-center gap-3 shrink-0">
@@ -3598,14 +3606,14 @@
 
                               <button
                                 onClick={() => handleLiquidateWorker(w.id)}
-                                disabled={!hasPending}
+                                disabled={!hasPending || r1.busy || r1.pending || !r1.connected}
                                 className={`w-full py-2.5 font-extrabold text-xs rounded-lg flex items-center justify-center gap-1.5 transition ${
                                   hasPending
                                     ? 'bg-emerald-600 hover:bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-600/20 cursor-pointer'
                                     : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                                 }`}
                               >
-                                <CreditCard className="w-4 h-4" /> Pagar y Liquidar (${formatMoney(pendingUSD)})
+                                <CreditCard className="w-4 h-4" /> Registrar liquidación (${formatMoney(pendingUSD)})
                               </button>
                             </div>
                           );
@@ -3617,9 +3625,9 @@
                     <div className="flex items-center justify-between bg-slate-900 border border-slate-800 p-4 rounded-2xl">
                       <div>
                         <h3 className="font-extrabold text-white text-base">Gestión y Rendimiento de Mercenarios</h3>
-                        <p className="text-xs text-slate-400">Personaliza el color identificativo, consulta sus métricas (sin contar pausas), su historial de cobros y edita sus datos.</p>
+                        <p className="text-xs text-slate-400">Consulta los perfiles y las liquidaciones registradas. Archivar conserva el historial de pagos.</p>
                       </div>
-                      <button onClick={() => { setEditingWorker(null); setWorkerForm({ name: '', email: '', specialty: '', color: WORKER_COLOR_OPTIONS[0].id }); setIsWorkerModalOpen(true); }} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5"><Plus className="w-4 h-4" /> Nuevo Mercenario</button>
+                      <button disabled title="Las altas y los cambios de cuenta Firebase requieren vinculación previa" onClick={() => { setEditingWorker(null); setWorkerForm({ name: '', email: '', specialty: '', color: WORKER_COLOR_OPTIONS[0].id }); setIsWorkerModalOpen(true); }} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5"><Plus className="w-4 h-4" /> Nuevo Mercenario</button>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -3656,8 +3664,8 @@
                                     <button
                                       key={c.id}
                                       type="button"
-                                      onClick={() => handleQuickWorkerColorChange(w, c.id)}
-                                      title={c.label}
+                                      disabled onClick={() => handleQuickWorkerColorChange(w, c.id)}
+                                      title="Color de referencia del perfil real"
                                       className={`w-4 h-4 rounded-full ${c.dotClass} transition ${wColor.id === c.id ? 'ring-2 ring-white scale-110' : 'opacity-50 hover:opacity-100'}`}
                                     />
                                   ))}
@@ -3747,11 +3755,11 @@
                         <div className="flex items-center gap-2 flex-wrap">
                           <button
                             type="button"
-                            onClick={() => setShowAllCreatorPasswords(!showAllCreatorPasswords)}
+                            onClick={() => IS_TEST_GITHUB ? r1.clearSecrets() : setShowAllCreatorPasswords(!showAllCreatorPasswords)}
                             className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold text-slate-300 hover:text-white flex items-center gap-1.5"
                           >
                             {showAllCreatorPasswords ? <EyeOff className="w-3.5 h-3.5 text-amber-400" /> : <Eye className="w-3.5 h-3.5 text-indigo-400" />}
-                            {showAllCreatorPasswords ? 'Ocultar Claves' : 'Ver Claves'}
+                            {IS_TEST_GITHUB ? 'Ocultar credenciales' : (showAllCreatorPasswords ? 'Ocultar Claves' : 'Ver Claves')}
                           </button>
                           <button
                             type="button"
@@ -3824,6 +3832,7 @@
                                 <div className="flex items-center gap-1">
                                   <button
                                     onClick={() => {
+                                      if (IS_TEST_GITHUB && !r1.isManaged(m)) { showToast('Actualiza para cargar la misión desde el servicio.'); return; }
                                       setEditingMission(m);
                                       setNewChecklistItemText('');
                                       setMissionForm({
@@ -3833,7 +3842,7 @@
                                         missionTitle: m.missionTitle || '',
                                         gameCategory: m.gameCategory || 'Exploración de Actos',
                                         accountUser: m.accountUser || '',
-                                        accountPass: decryptPassword(m.accountPass) || '',
+                                        accountPass: IS_TEST_GITHUB ? '' : (decryptPassword(m.accountPass) || ''),
                                         loginMethod: m.loginMethod || 'Kabam ID',
                                         instructions: m.instructions || '',
                                         priority: m.priority || 'Normal',
@@ -3883,6 +3892,7 @@
                                 <>
                                   {renderMissionChecklistBlock(m)}
 
+                                  {IS_TEST_GITHUB ? <R1CredentialCard r1={r1} mission={m} /> : (
                                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2 text-xs">
                                     <div className="flex items-center justify-between text-slate-400">
                                       <span>Acceso ({m.loginMethod || 'Kabam ID'})</span>
@@ -3901,6 +3911,7 @@
                                       </div>
                                     </div>
                                   </div>
+                                  )}
 
                                   {m.instructions && (
                                     <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-2.5 text-xs text-slate-300">
@@ -3992,6 +4003,18 @@
                 )}
 
                 <form onSubmit={handleSaveMission} className="space-y-4 text-xs">
+                  {IS_TEST_GITHUB && <div className="rounded-xl bg-amber-950/30 border border-amber-500/40 p-3 text-xs text-amber-200 space-y-2">
+                    <strong>Operación sobre datos reales</strong>
+                    <p>Los cambios se guardan en las misiones reales. Mantén la credencial actual o introduce una nueva; nunca se precarga la contraseña guardada.</p>
+                    <p>Guardar modifica la misión real mediante el NAS. Editar conserva la credencial salvo que elijas sustituirla o retirarla.</p>
+                    <label className="block font-bold">Acción sobre la credencial
+                      <select aria-label="Acción sobre credencial R1" value={r1CredentialMode} onChange={e=>{setR1CredentialMode(e.target.value); setMissionForm(prev=>({...prev,accountUser:'',accountPass:''}));}} className="block w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2">
+                        <option value="keep">{editingMission ? 'Conservar sin tocar' : 'Crear sin credencial'}</option>
+                        <option value="replace" disabled={editingMission?.status==='Completada'}>Sustituir / guardar credencial</option>
+                        <option value="remove">Retirar credencial</option>
+                      </select>
+                    </label>
+                  </div>}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="relative">
                       <label className="block font-bold text-slate-300 mb-1">Nombre del Cliente *</label>
@@ -4002,7 +4025,7 @@
                         onFocus={() => setShowClientSuggestions(true)}
                         onBlur={() => setTimeout(() => setShowClientSuggestions(false), 180)}
                         onChange={(e) => setMissionForm({ ...missionForm, clientName: e.target.value })}
-                        placeholder="Ej. Carlos MCOC"
+                        placeholder="Nombre del cliente"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:border-indigo-500 focus:outline-none"
                       />
                       {showClientSuggestions && matchingClientSuggestions.length > 0 && (
@@ -4030,8 +4053,9 @@
                       <input
                         type="text"
                         value={missionForm.clientPhone}
+                        readOnly
                         onChange={(e) => setMissionForm({ ...missionForm, clientPhone: e.target.value, clientContact: e.target.value })}
-                        placeholder="+34600112233"
+                        placeholder="+34 600 000 000"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white font-mono focus:border-indigo-500 focus:outline-none"
                       />
                     </div>
@@ -4080,6 +4104,8 @@
                       <label className="block font-bold text-slate-400 mb-1">Correo / Usuario Juego</label>
                       <input
                         type="text"
+                        disabled={IS_TEST_GITHUB && r1CredentialMode !== 'replace'}
+                        autoComplete="off"
                         value={missionForm.accountUser}
                         onChange={(e) => setMissionForm({ ...missionForm, accountUser: e.target.value })}
                         placeholder="correo@juego.com"
@@ -4089,7 +4115,9 @@
                     <div>
                       <label className="block font-bold text-slate-400 mb-1">Contraseña Juego</label>
                       <input
-                        type="text"
+                        type="password"
+                        disabled={IS_TEST_GITHUB && r1CredentialMode !== 'replace'}
+                        autoComplete="new-password"
                         value={missionForm.accountPass}
                         onChange={(e) => setMissionForm({ ...missionForm, accountPass: e.target.value })}
                         placeholder="Contraseña..."
@@ -4221,13 +4249,14 @@
                     <button
                       type="button"
                       onClick={handleSaveAsTemplate}
+                      title="Guardar plantilla"
                       className="px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 font-extrabold flex items-center gap-1.5"
                     >
                       <BookmarkPlus className="w-4 h-4" /> Guardar como Plantilla
                     </button>
                     <div className="flex items-center gap-2">
                       <button type="button" onClick={() => setIsMissionModalOpen(false)} className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold">Cancelar</button>
-                      <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold shadow-lg shadow-indigo-600/30">
+                      <button type="submit" disabled={IS_TEST_GITHUB && (r1.busy || r1.pending || !r1.connected)} className="disabled:opacity-40 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold shadow-lg shadow-indigo-600/30">
                         {editingMission ? 'Guardar Cambios' : 'Registrar Misión'}
                       </button>
                     </div>
@@ -4244,7 +4273,7 @@
             <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <h3 className="text-base font-extrabold text-white">{editingWorker ? 'Editar Mercenario' : 'Nuevo Mercenario'}</h3>
+                  <h3 className="text-base font-extrabold text-white">{editingWorker ? 'Editar perfil' : 'Perfiles vinculados'}</h3>
                   <button onClick={() => setIsWorkerModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
                 </div>
                 <form onSubmit={handleSaveWorker} className="space-y-4 text-xs">
@@ -4254,11 +4283,11 @@
                   </div>
                   <div>
                     <label className="block font-bold text-slate-300 mb-1">Correo de acceso Firebase Auth *</label>
-                    <input type="email" required value={workerForm.email} onChange={(e) => setWorkerForm({ ...workerForm, email: e.target.value })} placeholder="mercenario@gmail.com" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white font-mono" />
+                    <input type="email" required readOnly value={workerForm.email} onChange={(e) => setWorkerForm({ ...workerForm, email: e.target.value })} placeholder="mercenario@gmail.com" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white font-mono" />
                   </div>
                   <div>
                     <label className="block font-bold text-slate-300 mb-1">Especialidad</label>
-                    <input type="text" value={workerForm.specialty} onChange={(e) => setWorkerForm({ ...workerForm, specialty: e.target.value })} placeholder="Ej. Necrópolis / Actos / Crisol" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white" />
+                    <input type="text" readOnly value={workerForm.specialty} onChange={(e) => setWorkerForm({ ...workerForm, specialty: e.target.value })} placeholder="Ej. Necrópolis / Actos / Crisol" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white" />
                   </div>
                   <div>
                     <label className="block font-bold text-slate-300 mb-2">Color Identificativo</label>
@@ -4267,7 +4296,7 @@
                         <button
                           key={c.id}
                           type="button"
-                          onClick={() => setWorkerForm({ ...workerForm, color: c.id })}
+                          disabled onClick={() => setWorkerForm({ ...workerForm, color: c.id })}
                           className={`px-3 py-2 rounded-xl border text-left font-bold flex items-center gap-2 ${
                             workerForm.color === c.id ? `${c.badgeClass} ring-2 ring-white/30` : 'bg-slate-950 border-slate-800 text-slate-400'
                           }`}
@@ -4297,7 +4326,7 @@
                   <CheckCircle2 className="w-5 h-5 text-emerald-400" /> Finalizar "{completingMission.missionTitle}"
                 </h3>
                 <p className="text-xs text-slate-300">
-                  Al confirmar, se avisará automáticamente al cliente por WhatsApp y la contraseña se destruirá de la base de datos por seguridad.
+                  {IS_TEST_GITHUB ? 'Se completará la misión real y se retirará su credencial. Se generará un aviso si WhatsApp está activado.' : 'Al confirmar, se avisará automáticamente al cliente por WhatsApp y la contraseña se destruirá de la base de datos por seguridad.'}
                 </p>
                 <div>
                   <label className="block text-xs font-bold text-slate-400 mb-1">Nota de finalización (opcional)</label>
@@ -4325,21 +4354,12 @@
               <form onSubmit={handleSaveBotSettings} className="bg-slate-900 border border-cyan-500/40 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl text-xs">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                   <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                    <Bot className="w-5 h-5 text-cyan-400" /> Automatización WhatsApp (Make.com + Meta)
+                    <Bot className="w-5 h-5 text-cyan-400" /> Avisos de WhatsApp
                   </h3>
                   <button type="button" onClick={() => setIsBotModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-300 mb-1">URL del Webhook de Make.com</label>
-                  <input
-                    type="url"
-                    value={automationSettings.makeWebhookUrl || ''}
-                    onChange={(e) => setAutomationSettings({ ...automationSettings, makeWebhookUrl: e.target.value })}
-                    placeholder="https://hook.eu2.make.com/..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white font-mono"
-                  />
-                </div>
+                <p>El NAS envía los avisos. La activación inicial se realiza con el comando de instalación.</p>
 
                 <div className="space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
                   <label className="flex items-center justify-between cursor-pointer">
@@ -4369,9 +4389,6 @@
                 </div>
 
                 <div className="flex items-center justify-between gap-2 pt-2">
-                  <button type="button" onClick={handleTestMakeWebhook} className="px-3 py-2.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-extrabold flex items-center gap-1.5">
-                    <Send className="w-3.5 h-3.5" /> Probar Webhook
-                  </button>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setIsBotModalOpen(false)} className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold">Cerrar</button>
                     <button type="submit" className="px-4 py-2.5 rounded-xl bg-emerald-500 text-slate-950 font-extrabold">Guardar</button>
@@ -4422,7 +4439,7 @@
     }
 
     const root = createRoot(document.getElementById('root'));
-    root.render(<App />);
+    root.render(IS_TEST_GITHUB ? <App /> : <div style={{padding:32,color:'white'}}>Abre la web de GestiónMercenarios desde su dirección habitual.</div>);
   </script>
 </body>
 </html>
