@@ -4003,18 +4003,6 @@
                 )}
 
                 <form onSubmit={handleSaveMission} className="space-y-4 text-xs">
-                  {IS_TEST_GITHUB && <div className="rounded-xl bg-amber-950/30 border border-amber-500/40 p-3 text-xs text-amber-200 space-y-2">
-                    <strong>Operación sobre datos reales</strong>
-                    <p>Los cambios se guardan en las misiones reales. Mantén la credencial actual o introduce una nueva; nunca se precarga la contraseña guardada.</p>
-                    <p>Guardar modifica la misión real mediante el NAS. Editar conserva la credencial salvo que elijas sustituirla o retirarla.</p>
-                    <label className="block font-bold">Acción sobre la credencial
-                      <select aria-label="Acción sobre credencial R1" value={r1CredentialMode} onChange={e=>{setR1CredentialMode(e.target.value); setMissionForm(prev=>({...prev,accountUser:'',accountPass:''}));}} className="block w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2">
-                        <option value="keep">{editingMission ? 'Conservar sin tocar' : 'Crear sin credencial'}</option>
-                        <option value="replace" disabled={editingMission?.status==='Completada'}>Sustituir / guardar credencial</option>
-                        <option value="remove">Retirar credencial</option>
-                      </select>
-                    </label>
-                  </div>}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="relative">
                       <label className="block font-bold text-slate-300 mb-1">Nombre del Cliente *</label>
@@ -4087,6 +4075,15 @@
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                    {IS_TEST_GITHUB && <div className="sm:col-span-3">
+                    <label className="block font-bold text-slate-400">Datos de acceso
+                      <select aria-label="Datos de acceso" value={r1CredentialMode} onChange={e=>{setR1CredentialMode(e.target.value); setMissionForm(prev=>({...prev,accountUser:'',accountPass:''}));}} className="block w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2">
+                        <option value="keep">{editingMission ? 'Conservar los actuales' : 'Crear sin datos de acceso'}</option>
+                        <option value="replace" disabled={editingMission?.status==='Completada'}>Introducir correo y contraseña</option>
+                        <option value="remove">Retirar correo y contraseña</option>
+                      </select>
+                    </label>
+                    </div>}
                     <div>
                       <label className="block font-bold text-slate-400 mb-1">Método Acceso</label>
                       <select
