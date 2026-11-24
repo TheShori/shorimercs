@@ -68,6 +68,7 @@
 
     // R1_INTEGRATION_TEST: formularios existentes; almacenamiento separado.
     import { useMissionR1, R1IntegrationBar, R1CredentialCard, R1DeliveryPanel } from './r1-operaciones-ui.js?v=10-cuota';
+    import { R1ReceiptPanel } from './r1-entregas-panel.mjs?v=18';
 
     // This entry point must never fall through to the production write branches.
     if (location.origin !== 'https://theshori.github.io' || !['/shorimercs/','/shorimercs/index.html'].includes(location.pathname)) throw Error('Abre la dirección habitual de GestiónMercenarios.');
@@ -2527,7 +2528,7 @@
 
                 {creatorTab === 'whatsappCenter' && IS_TEST_GITHUB ? (
 
-                  <R1DeliveryPanel r1={r1} />
+                  <R1ReceiptPanel authUser={authUser} />
 
                 ) : creatorTab === 'ranking' ? (
                   <div className="space-y-6">
