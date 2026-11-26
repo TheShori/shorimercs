@@ -68,6 +68,7 @@
 
     // R1_INTEGRATION_TEST: formularios existentes; almacenamiento separado.
     import { useMissionR1, R1IntegrationBar, R1CredentialCard, R1DeliveryPanel } from './r1-operaciones-ui.js?v=10-cuota';
+    import { cleanPhoneInput, preparePhoneInput } from './r1-phone-input.mjs?v=19';
     import { R1ReceiptPanel } from './r1-entregas-panel.mjs?v=18';
 
     // This entry point must never fall through to the production write branches.
@@ -1431,6 +1432,10 @@
         e.preventDefault();
         if (!missionForm.clientName.trim() || !missionForm.missionTitle.trim()) { showToast('⚠️ Faltan datos requeridos'); return; }
 
+        let cleanClientPhone;
+        try { cleanClientPhone = preparePhoneInput(missionForm.clientPhone || missionForm.clientContact || ''); }
+        catch (error) { showToast(error.message); return; }
+
         let finalChecklist = Array.isArray(missionForm.checklist) ? [...missionForm.checklist] : [];
         if (newChecklistItemText.trim()) {
           finalChecklist.push({
@@ -1444,7 +1449,7 @@
         if (IS_TEST_GITHUB) {
           if (editingMission && !r1.isManaged(editingMission)) { showToast('Actualiza para cargar la misión desde el servicio.'); return; }
           try {
-            await r1.save(editingMission, missionForm, finalChecklist, r1CredentialMode);
+            await r1.save(editingMission, {...missionForm, clientPhone: cleanClientPhone, clientContact: cleanClientPhone}, finalChecklist, r1CredentialMode);
             setMissionForm(prev=>({...prev,accountUser:'',accountPass:''}));
             setIsMissionModalOpen(false);
             showToast('✅ Misión TEST guardada por Node.js. Consulta el panel R1.');
@@ -4041,8 +4046,10 @@
                       <label className="block font-bold text-slate-300 mb-1">WhatsApp Cliente (con prefijo, ej. +34...)</label>
                       <input
                         type="text"
+                        inputMode="tel"
+                        autoComplete="tel"
                         value={missionForm.clientPhone}
-                        onChange={(e) => setMissionForm({ ...missionForm, clientPhone: e.target.value, clientContact: e.target.value })}
+                        onChange={(e) => { const phone = cleanPhoneInput(e.target.value); setMissionForm(prev => ({ ...prev, clientPhone: phone, clientContact: phone })); }}
                         placeholder="+34 600 000 000"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white font-mono focus:border-indigo-500 focus:outline-none"
                       />
