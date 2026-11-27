@@ -71,6 +71,7 @@
     import { cleanPhoneInput, preparePhoneInput } from './r1-phone-input.mjs?v=19';
     import { R1ReceiptPanel } from './r1-entregas-panel.mjs?v=18';
     import { R1MissionCalendar } from './r1-mission-calendar.mjs?v=21';
+    import { R1WorkerRanking } from './r1-worker-ranking.mjs?v=22';
 
     // This entry point must never fall through to the production write branches.
     if (location.origin !== 'https://theshori.github.io' || !['/shorimercs/','/shorimercs/index.html'].includes(location.pathname)) throw Error('Abre la dirección habitual de GestiónMercenarios.');
@@ -3729,6 +3730,7 @@
                         );
                       })}
                     </div>
+                    {isCreatorSession && <R1WorkerRanking authUser={authUser} missions={missions} workers={workers} />}
                     {isCreatorSession && <R1MissionCalendar authUser={authUser} missions={missions} workers={workers} />}
                   </div>
                 ) : (
